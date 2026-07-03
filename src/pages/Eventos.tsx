@@ -72,8 +72,8 @@ export function Eventos() {
               <div className="grow">
                 <div className="row-name">{ev.contractorName}</div>
                 <div className="row-sub">
-                  {ev.time}{ev.location ? ' · ' : ''}
-                  {ev.location && (ev.locationLink
+                  {ev.time}{(ev.location || ev.locationLink) ? ' · ' : ''}
+                  {ev.locationLink
                     ? <a
                         href={ev.locationLink}
                         target="_blank"
@@ -81,9 +81,9 @@ export function Eventos() {
                         onClick={(e) => e.stopPropagation()}
                         style={{ color: 'var(--brand-ink)', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 3 }}
                       >
-                        <Icon name="map" size={12} />{ev.location}
+                        <Icon name="map" size={12} />Ver localização
                       </a>
-                    : ev.location)}
+                    : ev.location}
                 </div>
               </div>
               <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>

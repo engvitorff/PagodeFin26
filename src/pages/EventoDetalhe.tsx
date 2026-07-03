@@ -96,10 +96,10 @@ export function EventoDetalhe() {
           <div>
             <div style={{ fontSize: 16, fontWeight: 700 }}>{ev.contractorName}</div>
             <div className="faint">
-              {fmtDate(ev.date)} · {ev.time}{ev.location ? ' · ' : ''}
-              {ev.location && (ev.locationLink
-                ? <a href={ev.locationLink} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-ink)', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="map" size={12} />{ev.location}</a>
-                : ev.location)}
+              {fmtDate(ev.date)} · {ev.time}{(ev.location || ev.locationLink) ? ' · ' : ''}
+              {ev.locationLink
+                ? <a href={ev.locationLink} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-ink)', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="map" size={12} />Ver localização</a>
+                : ev.location}
             </div>
           </div>
         </div>
