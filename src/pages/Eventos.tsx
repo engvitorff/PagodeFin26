@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/ui/Icon';
 import { Modal } from '@/components/ui/Modal';
+import { MapPicker } from '@/components/ui/MapPicker';
 import { useAppData } from '@/context/AppDataContext';
 import { fmt, isOverdue, mesLabel, parseCents, parseDateLocal } from '@/lib/format';
 
@@ -107,8 +108,10 @@ function NovoEventoModal({ onClose, onSave }: { onClose: () => void; onSave: (pa
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [location, setLocation] = useState('');
+  const [locationLink, setLocationLink] = useState('');
   const [valor, setValor] = useState('');
   const [auto, setAuto] = useState(true);
+  const [mapOpen, setMapOpen] = useState(false);
 
   function handleSave() {
     if (!contractorName || !date) return;
@@ -117,7 +120,7 @@ function NovoEventoModal({ onClose, onSave }: { onClose: () => void; onSave: (pa
       date,
       time: time || '20:00',
       location,
-      locationLink: '',
+      locationLink,
       totalValueCents: parseCents(valor),
       status: 'A receber',
       operationalExpensesCents: 0,
@@ -145,7 +148,17 @@ function NovoEventoModal({ onClose, onSave }: { onClose: () => void; onSave: (pa
       </div>
       <div className="field">
         <label>Local</label>
-        <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Endereço ou nome do local" />
+        <div className="row gap8">
+          <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Endereço ou nome do local" style={{ flex: 1 }} />
+          <button className="btn btn-sm" type="button" onClick={() => setMapOpen(true)} title="Selecionar no mapa">
+            <Icon name="map" size={14} />Mapa
+          </button>
+        </div>
+        {locationLink && (
+          <a href={locationLink} target="_blank" rel="noreferrer" className="faint" style={{ fontSize: 11, marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Icon name="link" size={11} />Ver no Google Maps
+          </a>
+        )}
       </div>
       <div className="field">
         <label>Valor (R$)</label>
@@ -158,6 +171,14 @@ function NovoEventoModal({ onClose, onSave }: { onClose: () => void; onSave: (pa
         </div>
       </div>
       <button className="btn btn-brand btn-full" onClick={handleSave}>Salvar</button>
+
+      {mapOpen && (
+        <MapPicker
+          initialQuery={location}
+          onClose={() => setMapOpen(false)}
+          onConfirm={({ address, link }) => { setLocation(address); setLocationLink(link); setMapOpen(false); }}
+        />
+      )}
     </Modal>
   );
 }
