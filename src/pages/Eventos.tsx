@@ -71,7 +71,20 @@ export function Eventos() {
               </div>
               <div className="grow">
                 <div className="row-name">{ev.contractorName}</div>
-                <div className="row-sub">{ev.time} · {ev.location}</div>
+                <div className="row-sub">
+                  {ev.time}{ev.location ? ' · ' : ''}
+                  {ev.location && (ev.locationLink
+                    ? <a
+                        href={ev.locationLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ color: 'var(--brand-ink)', textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                      >
+                        <Icon name="map" size={12} />{ev.location}
+                      </a>
+                    : ev.location)}
+                </div>
               </div>
               <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                 <div style={{ fontWeight: 700, fontSize: 13 }}>{fmt(ev.totalValueCents)}</div>
