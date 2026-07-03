@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Icon } from '@/components/ui/Icon';
 import { Modal } from '@/components/ui/Modal';
+import { MapPicker } from '@/components/ui/MapPicker';
 import { useAppData } from '@/context/AppDataContext';
 import { avatarColor, calcBordero, initials } from '@/lib/calc';
 import { fmt, fmtDate, parseCents } from '@/lib/format';
@@ -94,7 +95,11 @@ export function EventoDetalhe() {
           </button>
           <div>
             <div style={{ fontSize: 16, fontWeight: 700 }}>{ev.contractorName}</div>
-            <div className="faint">{fmtDate(ev.date)} · {ev.time} · {ev.location}</div>
+            <div className="faint">
+              {fmtDate(ev.date)} · {ev.time} · {ev.locationLink
+                ? <a href={ev.locationLink} target="_blank" rel="noreferrer" style={{ color: 'var(--brand-ink)', textDecoration: 'underline' }}>{ev.location}</a>
+                : ev.location}
+            </div>
           </div>
         </div>
         <div className="row gap6">
@@ -293,7 +298,9 @@ function EditEventoModal({ evento, onClose, onSave }: { evento: import('@/types'
   const [date, setDate] = useState(evento.date);
   const [time, setTime] = useState(evento.time);
   const [location, setLocation] = useState(evento.location);
+  const [locationLink, setLocationLink] = useState(evento.locationLink);
   const [valor, setValor] = useState((evento.totalValueCents / 100).toFixed(2));
+  const [mapOpen, setMapOpen] = useState(false);
 
   return (
     <Modal title="Editar Show" onClose={onClose}>
@@ -302,14 +309,35 @@ function EditEventoModal({ evento, onClose, onSave }: { evento: import('@/types'
         <div className="field"><label>Data</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
         <div className="field"><label>Horário</label><input type="time" value={time} onChange={(e) => setTime(e.target.value)} /></div>
       </div>
-      <div className="field"><label>Local</label><input value={location} onChange={(e) => setLocation(e.target.value)} /></div>
+      <div className="field">
+        <label>Local</label>
+        <div className="row gap8">
+          <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Endereço ou nome do local" style={{ flex: 1 }} />
+          <button className="btn btn-sm" type="button" onClick={() => setMapOpen(true)} title="Selecionar no mapa">
+            <Icon name="map" size={14} />Mapa
+          </button>
+        </div>
+        {locationLink && (
+          <a href={locationLink} target="_blank" rel="noreferrer" className="faint" style={{ fontSize: 11, marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Icon name="link" size={11} />Ver no Google Maps
+          </a>
+        )}
+      </div>
       <div className="field"><label>Valor (R$)</label><input type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} /></div>
       <button
         className="btn btn-brand btn-full"
-        onClick={() => onSave({ contractorName, date, time, location, totalValueCents: parseCents(valor) })}
+        onClick={() => onSave({ contractorName, date, time, location, locationLink, totalValueCents: parseCents(valor) })}
       >
         Salvar alterações
       </button>
+
+      {mapOpen && (
+        <MapPicker
+          initialQuery={location}
+          onClose={() => setMapOpen(false)}
+          onConfirm={({ address, link }) => { setLocation(address); setLocationLink(link); setMapOpen(false); }}
+        />
+      )}
     </Modal>
   );
 }
