@@ -110,18 +110,18 @@ export function EventoDetalhe() {
         </div>
       </div>
 
-      <div className="metrics">
-        <div className="metric">
-          <div className="metric-lab">Valor bruto</div>
-          <div className="metric-val">{fmt(ev.totalValueCents)}</div>
+      <div className="card mb18">
+        <div className="brow">
+          <span className="metric-lab" style={{ marginBottom: 0 }}><Icon name="cash" size={14} />Valor bruto</span>
+          <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>{fmt(ev.totalValueCents)}</span>
         </div>
-        <div className="metric">
-          <div className="metric-lab">Cota por sócio</div>
-          <div className="metric-val">{fmt(Math.max(0, bordero.cotaSocio))}</div>
+        <div className="brow">
+          <span className="metric-lab" style={{ marginBottom: 0 }}><Icon name="usrplus" size={14} />Cota por sócio</span>
+          <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>{fmt(Math.max(0, bordero.cotaSocio))}</span>
         </div>
-        <div className="metric">
-          <div className="metric-lab">Caixa da banda</div>
-          <div className="metric-val">{fmt(Math.max(0, bordero.caixaBanda))}</div>
+        <div className="brow">
+          <span className="metric-lab" style={{ marginBottom: 0 }}><Icon name="wallet" size={14} />Caixa da banda</span>
+          <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>{fmt(Math.max(0, bordero.caixaBanda))}</span>
         </div>
       </div>
 
