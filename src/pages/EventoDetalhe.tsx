@@ -40,7 +40,7 @@ export function EventoDetalhe() {
   const { id } = useParams();
   const navigate = useNavigate();
   const {
-    eventos, musicos, updateEvento, deleteEvento,
+    eventos, musicos, updateEvento, deleteEvento, setEventoStatus,
     addCustomExpense, updateCustomExpense, removeCustomExpense,
     addScheduledMusician, removeScheduledMusician, updateScheduledMusician, payScheduledMusicians,
   } = useAppData();
@@ -66,7 +66,7 @@ export function EventoDetalhe() {
   }
 
   function toggleStatus() {
-    updateEvento(ev!.id, { status: ev!.status === 'A receber' ? 'Recebido' : 'A receber' as EventStatus });
+    setEventoStatus(ev!.id, ev!.status === 'A receber' ? 'Recebido' : 'A receber' as EventStatus);
   }
 
   function handleDelete() {

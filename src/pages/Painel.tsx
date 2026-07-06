@@ -64,7 +64,10 @@ export function Painel() {
     ].filter((s) => s.value > 0);
     return segments;
   }, [eventos, musicos]);
-  const pizzaTotal = costSplit.reduce((s, x) => s + x.value, 0) || 1;
+  // Base do percentual = Faturamento total (não a soma das próprias fatias) -- assim, se
+  // shows com prejuízo empurrarem os custos acima do faturamento, isso aparece nos números
+  // em vez de ser mascarado por uma normalização que sempre soma 100%.
+  const pizzaTotal = faturamentoTotal || 1;
 
   // Agenda
   const filteredEventos = eventos.filter((e) => {

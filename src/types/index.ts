@@ -53,6 +53,8 @@ export interface Transacao {
   type: TxType;
   category: string;
   date: string; // YYYY-MM-DD
+  /** Preenchido quando a transação foi gerada automaticamente a partir de um evento (ex.: ao marcar como Recebido). */
+  eventoId?: string;
 }
 
 export interface Contrato {

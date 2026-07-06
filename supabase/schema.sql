@@ -78,8 +78,12 @@ create table if not exists transacoes (
   type text not null,
   category text not null,
   date date not null,
+  evento_id uuid references eventos(id) on delete set null,
   created_at timestamptz not null default now()
 );
+
+-- Migração p/ bancos já existentes:
+alter table transacoes add column if not exists evento_id uuid references eventos(id) on delete set null;
 
 -- ── Contratos ───────────────────────────────────────────────
 create table if not exists contratos (

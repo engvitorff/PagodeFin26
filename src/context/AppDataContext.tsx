@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import type { Clausula, Contrato, CustomExpense, Evento, Musico, ScheduledMusician, Transacao } from '@/types';
+import type { Clausula, Contrato, CustomExpense, Evento, EventStatus, Musico, ScheduledMusician, Transacao } from '@/types';
 import { CLAUSULAS_DEFAULT } from '@/data/mocks';
+import { calcBordero } from '@/lib/calc';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 
@@ -21,6 +22,7 @@ interface AppDataContextValue {
   addEvento: (e: Omit<Evento, 'id' | 'scheduledMusicians'>) => Promise<Evento | null>;
   updateEvento: (id: string, patch: Partial<Evento>) => Promise<void>;
   deleteEvento: (id: string) => Promise<void>;
+  setEventoStatus: (id: string, status: EventStatus) => Promise<void>;
 
   addScheduledMusician: (eventoId: string, musicianId: string, feeOverrideCents: number) => Promise<void>;
   removeScheduledMusician: (eventoId: string, scheduleId: string) => Promise<void>;
@@ -117,7 +119,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setEventos(eventosRes.data.map(mapEventoRow));
       }
       if (transacoesRes.data) {
-        setTransacoes(transacoesRes.data.map((r: any) => ({ id: r.id, description: r.description, amountCents: r.amount_cents, type: r.type, category: r.category, date: r.date })));
+        setTransacoes(transacoesRes.data.map((r: any) => ({ id: r.id, description: r.description, amountCents: r.amount_cents, type: r.type, category: r.category, date: r.date, eventoId: r.evento_id ?? undefined })));
       }
       if (contratosRes.data) {
         setContratos(contratosRes.data.map((r: any) => ({ id: r.id, eventId: r.event_id, sequenceNumber: r.sequence_number, contractorName: r.contractor_name, eventDate: r.event_date, totalValueCents: r.total_value_cents, issuedAt: r.issued_at })));
@@ -234,6 +236,39 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.from('eventos').delete().eq('id', id);
     if (reportError(error)) return;
     setEventos((prev) => prev.filter((x) => x.id !== id));
+  };
+
+  /**
+   * Alterna o status do evento (A receber <-> Recebido). Ao marcar como Recebido, deposita
+   * automaticamente a fatia calculada "caixa da banda" (calcBordero) em uma transação IN
+   * vinculada ao evento; ao desmarcar, remove essa transação (reconciliação idempotente:
+   * sempre apaga e recria, refletindo os custos/escala mais recentes do evento).
+   */
+  const setEventoStatus: AppDataContextValue['setEventoStatus'] = async (id, status) => {
+    const ev = eventos.find((e) => e.id === id);
+    if (!ev || !group || ev.status === status) return;
+
+    const { error } = await supabase.from('eventos').update({ status }).eq('id', id);
+    if (reportError(error)) return;
+    setEventos((prev) => prev.map((x) => (x.id === id ? { ...x, status } : x)));
+
+    const { error: delError } = await supabase.from('transacoes').delete().eq('evento_id', id);
+    if (reportError(delError)) return;
+    setTransacoes((prev) => prev.filter((t) => t.eventoId !== id));
+
+    if (status === 'Recebido') {
+      const amount = Math.max(0, calcBordero(ev, musicos).caixaBanda);
+      if (amount > 0) {
+        const { data: tx, error: txError } = await supabase
+          .from('transacoes')
+          .insert({ group_id: group.id, description: `Caixa da banda - ${ev.contractorName}`, amount_cents: amount, type: 'IN', category: 'Receita de Show', date: ev.date, evento_id: id })
+          .select()
+          .single();
+        if (!reportError(txError) && tx) {
+          setTransacoes((prev) => [{ id: tx.id, description: tx.description, amountCents: tx.amount_cents, type: tx.type, category: tx.category, date: tx.date, eventoId: tx.evento_id ?? undefined }, ...prev]);
+        }
+      }
+    }
   };
 
   const addScheduledMusician: AppDataContextValue['addScheduledMusician'] = async (eventoId, musicianId, feeOverrideCents) => {
@@ -367,6 +402,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         addEvento,
         updateEvento,
         deleteEvento,
+        setEventoStatus,
         addScheduledMusician,
         removeScheduledMusician,
         updateScheduledMusician,
