@@ -48,10 +48,11 @@ function resolveTitle(pathname: string): string {
 export function AppShell() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { group, userInitials, logout } = useAuth();
+  const { group, user, userInitials, logout } = useAuth();
   const { mode, toggleMode } = useTheme();
   const { loadingData } = useAppData();
   const [dropOpen, setDropOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   async function handleLogout() {
     await logout();
@@ -124,7 +125,36 @@ export function AppShell() {
             <Icon name="bell" size={18} />
             <span className="notif-dot" />
           </button>
-          <div className="av" style={{ background: 'var(--brand)', cursor: 'pointer' }}>{userInitials}</div>
+          <div style={{ position: 'relative' }}>
+            <div
+              className="av"
+              style={{ background: 'var(--brand)', cursor: 'pointer' }}
+              onClick={() => setAccountOpen((v) => !v)}
+            >
+              {userInitials}
+            </div>
+            {accountOpen && (
+              <>
+                <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setAccountOpen(false)} />
+                <div className="groupdrop" style={{ position: 'absolute', top: 44, right: 0, width: 230, zIndex: 41 }}>
+                  <div style={{ padding: '8px 11px 10px', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {group?.name}
+                    </div>
+                    <div className="faint" style={{ marginTop: 2, wordBreak: 'break-all' }}>{user?.email}</div>
+                  </div>
+                  <div className="dropitem" onClick={() => { setAccountOpen(false); navigate('/config'); }}>
+                    <Icon name="settings" size={14} />
+                    Configurações
+                  </div>
+                  <div className="dropitem" style={{ color: 'var(--danger)' }} onClick={() => { setAccountOpen(false); handleLogout(); }}>
+                    <Icon name="logout" size={14} />
+                    Sair
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </header>
 
         <div className="content">
