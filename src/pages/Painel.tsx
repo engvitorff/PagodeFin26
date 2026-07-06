@@ -137,7 +137,7 @@ export function Painel() {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 22 }} className="grid2">
+      <div className="grid2" style={{ gap: 14, marginBottom: 22 }}>
         <div className="chart-wrap">
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14 }}>Receita mensal</div>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 80 }}>
