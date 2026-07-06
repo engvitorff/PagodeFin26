@@ -177,6 +177,8 @@ body.light {
 .chart-wrap { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px; }
 .chart-bar { background:var(--surface-2); border-radius:4px; position:relative; overflow:hidden; }
 .chart-bar .fill { position:absolute; left:0; top:0; bottom:0; border-radius:4px; transition:width .4s; }
+.chart-tip { position:absolute; bottom:100%; left:50%; transform:translateX(-50%); margin-bottom:6px; background:var(--surface-3); color:var(--text); font-size:11px; font-weight:700; padding:4px 8px; border-radius:6px; white-space:nowrap; box-shadow:0 4px 14px rgba(0,0,0,.3); pointer-events:none; z-index:5; }
+.chart-tip::after { content:''; position:absolute; top:100%; left:50%; transform:translateX(-50%); border:5px solid transparent; border-top-color:var(--surface-3); }
 
 @media (max-width:760px) {
   .sidebar { display:none; }

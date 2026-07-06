@@ -16,6 +16,8 @@ export function Painel() {
   const [month, setMonth] = useState(now.getMonth());
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos');
   const [ganttDate, setGanttDate] = useState<string | null>(null);
+  const [activeBar, setActiveBar] = useState<number | null>(null);
+  const [activeSeg, setActiveSeg] = useState<number | null>(null);
 
   const caixaBandaSaldo = transacoes.reduce((sum, t) => sum + (t.type === 'IN' ? t.amountCents : -t.amountCents), 0);
   const aReceber = eventos.filter((e) => e.status === 'A receber').reduce((s, e) => s + e.totalValueCents, 0);
@@ -140,15 +142,19 @@ export function Painel() {
       <div className="grid2" style={{ gap: 14, marginBottom: 22 }}>
         <div className="chart-wrap">
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14 }}>Receita mensal</div>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 80 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 80 }} onClick={() => setActiveBar(null)}>
             {monthlyRevenue.map((m, i) => (
               <div
                 key={i}
-                title={fmt(m.total)}
-                className="chart-bar"
-                style={{ flex: 1, height: `${Math.max(4, (m.total / maxRevenue) * 80)}px` }}
+                style={{ flex: 1, position: 'relative', cursor: 'pointer' }}
+                onMouseEnter={() => setActiveBar(i)}
+                onMouseLeave={() => setActiveBar(null)}
+                onClick={(e) => { e.stopPropagation(); setActiveBar((cur) => (cur === i ? null : i)); }}
               >
-                <div className="fill" style={{ width: '100%', background: m.total > 0 ? 'var(--brand)' : 'var(--surface-3)' }} />
+                <div className="chart-bar" style={{ height: `${Math.max(4, (m.total / maxRevenue) * 80)}px` }}>
+                  <div className="fill" style={{ width: '100%', background: m.total > 0 ? 'var(--brand)' : 'var(--surface-3)' }} />
+                </div>
+                {activeBar === i && <div className="chart-tip">{fmt(m.total)}</div>}
               </div>
             ))}
           </div>
@@ -158,14 +164,42 @@ export function Painel() {
             ))}
           </div>
         </div>
-        <div className="chart-wrap">
+        <div className="chart-wrap" onClick={() => setActiveSeg(null)}>
           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14 }}>Divisão de custos</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <PizzaChart segments={costSplit} total={pizzaTotal} />
+            <div style={{ position: 'relative', width: 80, height: 80, flexShrink: 0 }}>
+              <PizzaChart
+                segments={costSplit}
+                total={pizzaTotal}
+                activeIndex={activeSeg}
+                onHover={setActiveSeg}
+                onLeave={() => setActiveSeg(null)}
+                onToggle={(i) => setActiveSeg((cur) => (cur === i ? null : i))}
+              />
+              {activeSeg !== null && costSplit[activeSeg] && (
+                <div
+                  style={{
+                    position: 'absolute', top: 0, bottom: 0, left: -45, right: -45,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                    textAlign: 'center', gap: 1, pointerEvents: 'none',
+                  }}
+                >
+                  <div className="faint" style={{ fontSize: 9, whiteSpace: 'nowrap' }}>{costSplit[activeSeg].label}</div>
+                  <div style={{ fontSize: 13, fontWeight: 800 }}>{fmt(costSplit[activeSeg].value)}</div>
+                  <div className="muted" style={{ fontSize: 10, fontWeight: 600 }}>{Math.round((costSplit[activeSeg].value / pizzaTotal) * 100)}%</div>
+                </div>
+              )}
+            </div>
             <div style={{ fontSize: 12, display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
               {costSplit.length === 0 && <div className="faint">Sem dados</div>}
-              {costSplit.map((s) => (
-                <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {costSplit.map((s, i) => (
+                <div
+                  key={s.label}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', opacity: activeSeg === null || activeSeg === i ? 1 : 0.5 }}
+                  onMouseEnter={() => setActiveSeg(i)}
+                  onMouseLeave={() => setActiveSeg(null)}
+                  onClick={(e) => { e.stopPropagation(); setActiveSeg((cur) => (cur === i ? null : i)); }}
+                >
                   <span style={{ width: 8, height: 8, borderRadius: 2, background: s.color, flexShrink: 0 }} />
                   <span className="muted" style={{ flex: 1 }}>{s.label}</span>
                   <span style={{ fontWeight: 600 }}>{Math.round((s.value / pizzaTotal) * 100)}%</span>
@@ -291,7 +325,14 @@ const navBtnStyle: React.CSSProperties = {
   color: 'var(--text-dim)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
 };
 
-function PizzaChart({ segments, total }: { segments: { label: string; value: number; color: string }[]; total: number }) {
+function PizzaChart({ segments, total, activeIndex, onHover, onLeave, onToggle }: {
+  segments: { label: string; value: number; color: string }[];
+  total: number;
+  activeIndex: number | null;
+  onHover: (i: number) => void;
+  onLeave: () => void;
+  onToggle: (i: number) => void;
+}) {
   if (segments.length === 0) {
     return (
       <svg viewBox="0 0 80 80" width="80" height="80" style={{ flexShrink: 0 }}>
@@ -304,7 +345,7 @@ function PizzaChart({ segments, total }: { segments: { label: string; value: num
   const circumference = 2 * Math.PI * r;
   return (
     <svg viewBox="0 0 80 80" width="80" height="80" style={{ flexShrink: 0, transform: 'rotate(-90deg)' }}>
-      {segments.map((s) => {
+      {segments.map((s, i) => {
         const frac = s.value / total;
         const dash = frac * circumference;
         const offset = cumulative * circumference;
@@ -318,7 +359,13 @@ function PizzaChart({ segments, total }: { segments: { label: string; value: num
             strokeWidth="8"
             strokeDasharray={`${dash} ${circumference - dash}`}
             strokeDashoffset={-offset}
-          />
+            style={{ cursor: 'pointer', opacity: activeIndex === null || activeIndex === i ? 1 : 0.4, transition: 'opacity .15s' }}
+            onMouseEnter={() => onHover(i)}
+            onMouseLeave={onLeave}
+            onClick={(e) => { e.stopPropagation(); onToggle(i); }}
+          >
+            <title>{s.label}: {fmt(s.value)}</title>
+          </circle>
         );
       })}
     </svg>
