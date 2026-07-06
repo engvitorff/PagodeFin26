@@ -92,7 +92,7 @@ export function EventoDetalhe() {
 
   return (
     <div>
-      <div className="row between mb18">
+      <div className="row between mb18 sticky-subheader">
         <div className="row gap12">
           <button className="iconbtn" style={{ background: 'var(--surface)', border: '1px solid var(--border)' }} onClick={() => navigate('/eventos')}>
             <Icon name="back" size={18} />
@@ -129,16 +129,16 @@ export function EventoDetalhe() {
         </div>
       </div>
 
-      <div className="card mb18">
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Icon name="settings" size={16} style={{ color: 'var(--brand-ink)' }} />Fechamento do Palco
+      <div className="card mb18 card-compact">
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="settings" size={15} style={{ color: 'var(--brand-ink)' }} />Fechamento do Palco
         </div>
-        <div className="field" style={{ marginBottom: 14 }}>
-          <div className="row between mb8">
-            <label style={{ margin: 0, fontSize: 12, color: 'var(--text-dim)', fontWeight: 500 }}>Caixa (Fundo)</label>
+        <div className="field" style={{ marginBottom: 8 }}>
+          <div className="row between mb6">
+            <label style={{ margin: 0, fontSize: 11, color: 'var(--text-dim)', fontWeight: 500 }}>Caixa (Fundo)</label>
             <button
               className="btn btn-sm"
-              style={{ padding: '3px 8px', fontSize: 10, height: 'auto' }}
+              style={{ padding: '2px 7px', fontSize: 10, height: 'auto' }}
               onClick={() => updateEvento(ev.id, { isBandFundAuto: !ev.isBandFundAuto })}
             >
               {ev.isBandFundAuto ? 'Auto ✓' : 'Manual'}
@@ -154,16 +154,16 @@ export function EventoDetalhe() {
             />
           )}
         </div>
-        <div style={{ marginTop: 4 }}>
-          <div className="row between mb8">
-            <label style={{ fontSize: 12, color: 'var(--text-dim)', fontWeight: 500 }}>Custos Avulsos</label>
+        <div>
+          <div className="row between mb6">
+            <label style={{ fontSize: 11, color: 'var(--text-dim)', fontWeight: 500 }}>Custos Avulsos</label>
             <button className="btn btn-sm" onClick={() => addCustomExpense(ev.id)}><Icon name="plus" size={12} /> Adicionar Despesa</button>
           </div>
           <div>
             {ev.customExpenses.map((ce) => {
               const isTextMode = freeTextIds.has(ce.id) || (ce.name !== '' && !DESPESA_AVULSA_PRESETS.includes(ce.name));
               return (
-                <div key={ce.id} className="row gap8 mb8">
+                <div key={ce.id} className="row gap8 mb6">
                   <div className="field" style={{ marginBottom: 0, flex: 2 }}>
                     {isTextMode ? (
                       <input
@@ -225,9 +225,9 @@ export function EventoDetalhe() {
         </div>
       </div>
 
-      <div className="row between mb14">
-        <div style={{ fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Icon name="music" size={16} style={{ color: 'var(--brand-ink)' }} />Escala ({escalados.length})
+      <div className="row between mb8">
+        <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="music" size={15} style={{ color: 'var(--brand-ink)' }} />Escala ({escalados.length})
         </div>
         <button className="btn btn-sm" onClick={() => setEscalarOpen(true)}><Icon name="usrplus" size={14} />Escalar</button>
       </div>
@@ -235,7 +235,7 @@ export function EventoDetalhe() {
       {escalados.length === 0 && <div className="faint mb16">Nenhum músico escalado ainda.</div>}
       {escalados.map(({ schedule, musico, base, liquido, colorIdx }) => (
         <div key={schedule.id} className={`ecard${schedule.paymentStatus === 'Pago' ? ' pago' : ''}`}>
-          <div className="row gap12">
+          <div className="row gap8">
             <div className="mav" style={{ background: avatarColor(colorIdx) }}>{musico ? initials(musico.name) : '?'}</div>
             <div className="grow">
               <div className="row-name">{musico?.name ?? 'Músico removido'}</div>
