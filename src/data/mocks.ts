@@ -97,3 +97,5 @@ export const TX_CATEGORIES: Record<'IN' | 'OUT', string[]> = {
   IN: ['Receita de Show', 'Reposição de Caixa', 'Rendimento', 'Outros'],
   OUT: ['Cachê/Pagamento', 'Compra de Equipamentos', 'Despesas Operacionais', 'Manutenção', 'Outros'],
 };
+
+export const DESPESA_AVULSA_PRESETS = ['Locação de Som', 'Locação de Iluminação', 'Custos Logística'];

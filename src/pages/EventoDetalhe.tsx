@@ -5,8 +5,11 @@ import { Modal } from '@/components/ui/Modal';
 import { MapPicker } from '@/components/ui/MapPicker';
 import { useAppData } from '@/context/AppDataContext';
 import { avatarColor, calcBordero, initials } from '@/lib/calc';
+import { DESPESA_AVULSA_PRESETS } from '@/data/mocks';
 import { fmt, fmtDate, parseCents } from '@/lib/format';
 import type { EventStatus } from '@/types';
+
+const OUTRO_DESPESA = '__outro__';
 
 /**
  * Input monetário com estado local: digitação livre (sem reformatar a cada
@@ -53,6 +56,7 @@ export function EventoDetalhe() {
   const [confirmUnpayId, setConfirmUnpayId] = useState<string | null>(null);
   const [cobrancaOpen, setCobrancaOpen] = useState(false);
   const [contratoOpen, setContratoOpen] = useState(false);
+  const [freeTextIds, setFreeTextIds] = useState<Set<string>>(new Set());
 
   const bordero = useMemo(() => (ev ? calcBordero(ev, musicos) : null), [ev, musicos]);
 
@@ -129,36 +133,26 @@ export function EventoDetalhe() {
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
           <Icon name="settings" size={16} style={{ color: 'var(--brand-ink)' }} />Fechamento do Palco
         </div>
-        <div className="grid2 mb14">
-          <div className="field" style={{ marginBottom: 0 }}>
-            <label>Custos Logística (R$)</label>
+        <div className="field" style={{ marginBottom: 14 }}>
+          <div className="row between mb8">
+            <label style={{ margin: 0, fontSize: 12, color: 'var(--text-dim)', fontWeight: 500 }}>Caixa (Fundo)</label>
+            <button
+              className="btn btn-sm"
+              style={{ padding: '3px 8px', fontSize: 10, height: 'auto' }}
+              onClick={() => updateEvento(ev.id, { isBandFundAuto: !ev.isBandFundAuto })}
+            >
+              {ev.isBandFundAuto ? 'Auto ✓' : 'Manual'}
+            </button>
+          </div>
+          {ev.isBandFundAuto ? (
+            <input type="number" readOnly value={(bordero.caixaBanda / 100).toFixed(2)} />
+          ) : (
             <MoneyInput
-              key={`op-${ev.id}`}
-              cents={ev.operationalExpensesCents}
-              onCommit={(cents) => updateEvento(ev.id, { operationalExpensesCents: cents })}
+              key={`fund-${ev.id}`}
+              cents={ev.bandFundCents}
+              onCommit={(cents) => updateEvento(ev.id, { bandFundCents: cents })}
             />
-          </div>
-          <div className="field" style={{ marginBottom: 0 }}>
-            <div className="row between mb8">
-              <label style={{ margin: 0, fontSize: 12, color: 'var(--text-dim)', fontWeight: 500 }}>Caixa (Fundo)</label>
-              <button
-                className="btn btn-sm"
-                style={{ padding: '3px 8px', fontSize: 10, height: 'auto' }}
-                onClick={() => updateEvento(ev.id, { isBandFundAuto: !ev.isBandFundAuto })}
-              >
-                {ev.isBandFundAuto ? 'Auto ✓' : 'Manual'}
-              </button>
-            </div>
-            {ev.isBandFundAuto ? (
-              <input type="number" readOnly value={(bordero.caixaBanda / 100).toFixed(2)} />
-            ) : (
-              <MoneyInput
-                key={`fund-${ev.id}`}
-                cents={ev.bandFundCents}
-                onCommit={(cents) => updateEvento(ev.id, { bandFundCents: cents })}
-              />
-            )}
-          </div>
+          )}
         </div>
         <div style={{ marginTop: 4 }}>
           <div className="row between mb8">
@@ -166,19 +160,40 @@ export function EventoDetalhe() {
             <button className="btn btn-sm" onClick={() => addCustomExpense(ev.id)}><Icon name="plus" size={12} /> Adicionar Despesa</button>
           </div>
           <div>
-            {ev.customExpenses.map((ce) => (
-              <div key={ce.id} className="row gap8 mb8">
-                <input
-                  placeholder="Descrição" defaultValue={ce.name}
-                  onBlur={(e) => updateCustomExpense(ev.id, ce.id, { name: e.target.value })}
-                  style={{ flex: 2 }}
-                />
-                <div style={{ flex: 1 }}>
-                  <MoneyInput cents={ce.cents} onCommit={(cents) => updateCustomExpense(ev.id, ce.id, { cents })} />
+            {ev.customExpenses.map((ce) => {
+              const isTextMode = freeTextIds.has(ce.id) || (ce.name !== '' && !DESPESA_AVULSA_PRESETS.includes(ce.name));
+              return (
+                <div key={ce.id} className="row gap8 mb8">
+                  <div className="field" style={{ marginBottom: 0, flex: 2 }}>
+                    {isTextMode ? (
+                      <input
+                        placeholder="Descrição" defaultValue={ce.name} autoFocus={freeTextIds.has(ce.id)}
+                        onBlur={(e) => updateCustomExpense(ev.id, ce.id, { name: e.target.value })}
+                      />
+                    ) : (
+                      <select
+                        value={ce.name}
+                        onChange={(e) => {
+                          if (e.target.value === OUTRO_DESPESA) {
+                            setFreeTextIds((prev) => new Set(prev).add(ce.id));
+                          } else {
+                            updateCustomExpense(ev.id, ce.id, { name: e.target.value });
+                          }
+                        }}
+                      >
+                        <option value="" disabled>Selecionar descrição</option>
+                        {DESPESA_AVULSA_PRESETS.map((p) => <option key={p} value={p}>{p}</option>)}
+                        <option value={OUTRO_DESPESA}>Outro (digitar)</option>
+                      </select>
+                    )}
+                  </div>
+                  <div className="field" style={{ marginBottom: 0, flex: 1 }}>
+                    <MoneyInput cents={ce.cents} onCommit={(cents) => updateCustomExpense(ev.id, ce.id, { cents })} />
+                  </div>
+                  <button className="iconbtn" onClick={() => removeCustomExpense(ev.id, ce.id)}><Icon name="trash" size={14} /></button>
                 </div>
-                <button className="iconbtn" onClick={() => removeCustomExpense(ev.id, ce.id)}><Icon name="trash" size={14} /></button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
@@ -196,7 +211,9 @@ export function EventoDetalhe() {
         </div>
         <div>
           <div className="brow"><span>Faturamento</span><span>{fmt(bordero.faturamento)}</span></div>
-          <div className="brow"><span>Custos operacionais</span><span className="neg">- {fmt(bordero.operacional)}</span></div>
+          {bordero.operacional > 0 && (
+            <div className="brow"><span>Custos operacionais</span><span className="neg">- {fmt(bordero.operacional)}</span></div>
+          )}
           {ev.customExpenses.map((ce) => (
             <div className="brow" key={ce.id}><span>{ce.name || 'Despesa avulsa'}</span><span className="neg">- {fmt(ce.cents)}</span></div>
           ))}
