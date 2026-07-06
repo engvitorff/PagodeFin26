@@ -128,11 +128,11 @@ export function Painel() {
 
   return (
     <div>
-      <div className="metrics">
+      <div className="card mb18">
         {metrics.map((m) => (
-          <div className="metric" key={m.label}>
-            <div className="metric-lab"><Icon name={m.icon} size={13} />{m.label}</div>
-            <div className="metric-val">{fmt(m.value)}</div>
+          <div className="brow" key={m.label}>
+            <span className="metric-lab" style={{ marginBottom: 0 }}><Icon name={m.icon} size={14} />{m.label}</span>
+            <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>{fmt(m.value)}</span>
           </div>
         ))}
       </div>
