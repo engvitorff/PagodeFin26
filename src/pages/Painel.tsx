@@ -12,16 +12,47 @@ export function Painel() {
   const navigate = useNavigate();
 
   const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth());
+  const [year, setYear] = useState<number | 'all'>('all');
+  const [month, setMonth] = useState<number | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos');
   const [ganttDate, setGanttDate] = useState<string | null>(null);
   const [activeBar, setActiveBar] = useState<number | null>(null);
   const [activeSeg, setActiveSeg] = useState<number | null>(null);
 
-  const caixaBandaSaldo = transacoes.reduce((sum, t) => sum + (t.type === 'IN' ? t.amountCents : -t.amountCents), 0);
-  const aReceber = eventos.filter((e) => e.status === 'A receber').reduce((s, e) => s + e.totalValueCents, 0);
-  const faturamentoTotal = eventos.reduce((s, e) => s + e.totalValueCents, 0);
+  // true quando um mes especifico esta selecionado (habilita o calendario);
+  // "Todos os anos/meses" mostra uma lista simples, sem calendario.
+  const hasSpecificMonth = year !== 'all' && month !== 'all';
+
+  function matchesYearMonth(dateStr: string): boolean {
+    const d = parseDateLocal(dateStr);
+    if (year !== 'all' && d.getFullYear() !== year) return false;
+    if (month !== 'all' && d.getMonth() !== month) return false;
+    return true;
+  }
+
+  function matchesStatus(status: string): boolean {
+    if (statusFilter === 'receber') return status === 'A receber';
+    if (statusFilter === 'recebido') return status === 'Recebido';
+    return true;
+  }
+
+  // Eventos dentro do filtro de ano/mes/status -- usado nos saldos, graficos e na agenda.
+  const scopedEventos = useMemo(
+    () => eventos.filter((e) => matchesYearMonth(e.date) && matchesStatus(e.status)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [eventos, year, month, statusFilter]
+  );
+
+  // Transacoes dentro do filtro de ano/mes (status de show nao se aplica ao Caixa).
+  const scopedTransacoes = useMemo(
+    () => transacoes.filter((t) => matchesYearMonth(t.date)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [transacoes, year, month]
+  );
+
+  const caixaBandaSaldo = scopedTransacoes.reduce((sum, t) => sum + (t.type === 'IN' ? t.amountCents : -t.amountCents), 0);
+  const aReceber = scopedEventos.filter((e) => e.status === 'A receber').reduce((s, e) => s + e.totalValueCents, 0);
+  const faturamentoTotal = scopedEventos.reduce((s, e) => s + e.totalValueCents, 0);
 
   const metrics = [
     { label: 'Caixa da banda', value: caixaBandaSaldo, icon: 'wallet' },
@@ -29,27 +60,32 @@ export function Painel() {
     { label: 'Faturamento total', value: faturamentoTotal, icon: 'chart' },
   ];
 
-  // Receita mensal - últimos 6 meses
+  // Receita mensal - 6 meses terminando no mes selecionado. Se so o ano estiver definido
+  // (mes em "Todos"), ancora em dezembro daquele ano (mostra o 2o semestre). Sem nenhum
+  // filtro, ancora no mes atual real.
   const monthlyRevenue = useMemo(() => {
+    const anchorY = year !== 'all' ? year : now.getFullYear();
+    const anchorM = hasSpecificMonth ? (month as number) : (year !== 'all' ? 11 : now.getMonth());
     const months: { label: string; total: number }[] = [];
     for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const d = new Date(anchorY, anchorM - i, 1);
       const total = eventos
         .filter((e) => {
           const ed = parseDateLocal(e.date);
-          return ed.getFullYear() === d.getFullYear() && ed.getMonth() === d.getMonth();
+          return ed.getFullYear() === d.getFullYear() && ed.getMonth() === d.getMonth() && matchesStatus(e.status);
         })
         .reduce((s, e) => s + e.totalValueCents, 0);
       months.push({ label: mesLabel(d.getMonth()), total });
     }
     return months;
-  }, [eventos]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventos, year, month, statusFilter]);
   const maxRevenue = Math.max(1, ...monthlyRevenue.map((m) => m.total));
 
-  // Divisão de custos (pizza)
+  // Divisão de custos (pizza) -- agregada so sobre os eventos dentro do filtro
   const costSplit = useMemo(() => {
     let caixa = 0, operacional = 0, freelancers = 0, socios = 0;
-    for (const ev of eventos) {
+    for (const ev of scopedEventos) {
       const b = calcBordero(ev, musicos);
       caixa += Math.max(0, b.caixaBanda);
       operacional += b.operacional + b.customTotal;
@@ -63,25 +99,15 @@ export function Painel() {
       { label: 'Sócios', value: socios, color: PIZZA_COLORS.socios },
     ].filter((s) => s.value > 0);
     return segments;
-  }, [eventos, musicos]);
-  // Base do percentual = Faturamento total (não a soma das próprias fatias) -- assim, se
-  // shows com prejuízo empurrarem os custos acima do faturamento, isso aparece nos números
-  // em vez de ser mascarado por uma normalização que sempre soma 100%.
+  }, [scopedEventos, musicos]);
+  // Base do percentual = Faturamento (do escopo filtrado) -- não a soma das próprias fatias --
+  // assim, se shows com prejuízo empurrarem os custos acima do faturamento, isso aparece nos
+  // números em vez de ser mascarado por uma normalização que sempre soma 100%.
   const pizzaTotal = faturamentoTotal || 1;
 
-  // Agenda
-  const filteredEventos = eventos.filter((e) => {
-    if (statusFilter === 'receber') return e.status === 'A receber';
-    if (statusFilter === 'recebido') return e.status === 'Recebido';
-    return true;
-  });
-
-  const monthEventos = filteredEventos
-    .filter((e) => {
-      const d = parseDateLocal(e.date);
-      return d.getFullYear() === year && d.getMonth() === month;
-    })
-    .sort((a, b) => a.date.localeCompare(b.date));
+  // Agenda: com mes especifico, a lista e exatamente o escopo do mes (calendario); em "Todos",
+  // vira uma lista simples sem calendario.
+  const monthEventos = [...scopedEventos].sort((a, b) => a.date.localeCompare(b.date));
 
   const eventsByDate = useMemo(() => {
     const map = new Map<string, typeof eventos>();
@@ -93,14 +119,17 @@ export function Painel() {
     return map;
   }, [monthEventos]);
 
+  const calendarYear = hasSpecificMonth ? (year as number) : now.getFullYear();
+  const calendarMonth = hasSpecificMonth ? (month as number) : now.getMonth();
+
   const calendarCells = useMemo(() => {
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDay = new Date(calendarYear, calendarMonth, 1).getDay();
+    const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
     const cells: (number | null)[] = [];
     for (let i = 0; i < firstDay; i++) cells.push(null);
     for (let d = 1; d <= daysInMonth; d++) cells.push(d);
     return cells;
-  }, [year, month]);
+  }, [calendarYear, calendarMonth]);
 
   const today = todayStr();
 
@@ -112,8 +141,8 @@ export function Painel() {
   }, [eventos]);
 
   function navMonth(delta: number) {
-    let m = month + delta;
-    let y = year;
+    let m = calendarMonth + delta;
+    let y = calendarYear;
     if (m < 0) { m = 11; y -= 1; }
     if (m > 11) { m = 0; y += 1; }
     setMonth(m);
@@ -122,7 +151,7 @@ export function Painel() {
   }
 
   function dateStr(d: number) {
-    return `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    return `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   }
 
   function openGantt(ds: string) {
@@ -218,16 +247,18 @@ export function Painel() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
             <select
               value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
+              onChange={(e) => setYear(e.target.value === 'all' ? 'all' : Number(e.target.value))}
               style={{ padding: '5px 12px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)', fontSize: 13, fontWeight: 600, color: 'var(--text)', height: 34 }}
             >
+              <option value="all">Todos os anos</option>
               {yearsAvailable.map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
             <select
               value={month}
-              onChange={(e) => setMonth(Number(e.target.value))}
+              onChange={(e) => setMonth(e.target.value === 'all' ? 'all' : Number(e.target.value))}
               style={{ padding: '5px 12px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)', fontSize: 13, fontWeight: 600, color: 'var(--text)', height: 34, minWidth: 110 }}
             >
+              <option value="all">Todos os meses</option>
               {Array.from({ length: 12 }, (_, i) => <option key={i} value={i}>{mesLabel(i, true)}</option>)}
             </select>
             <div style={{ flex: 1, minWidth: 12 }} />
@@ -241,45 +272,49 @@ export function Painel() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 15, fontWeight: 600 }}>
               <Icon name="calendar" size={16} style={{ color: 'var(--brand-ink)' }} />
-              <span>{mesLabel(month, true)} de {year}</span>
+              <span>{hasSpecificMonth ? `${mesLabel(calendarMonth, true)} de ${calendarYear}` : 'Todos os shows'}</span>
             </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={() => navMonth(-1)} style={navBtnStyle}><Icon name="back" size={13} /></button>
-              <button onClick={() => navMonth(1)} style={{ ...navBtnStyle, transform: 'scaleX(-1)' }}><Icon name="back" size={13} /></button>
-            </div>
+            {hasSpecificMonth && (
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button onClick={() => navMonth(-1)} style={navBtnStyle}><Icon name="back" size={13} /></button>
+                <button onClick={() => navMonth(1)} style={{ ...navBtnStyle, transform: 'scaleX(-1)' }}><Icon name="back" size={13} /></button>
+              </div>
+            )}
           </div>
 
-          <div className="ag-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16, alignItems: 'start' }}>
-            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '10px 12px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', marginBottom: 6 }}>
-                {DIAS_SEMANA.map((d, i) => <div className="ag-dh" key={i}>{d}</div>)}
+          <div className={hasSpecificMonth ? 'ag-two-col' : ''} style={hasSpecificMonth ? { display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16, alignItems: 'start' } : undefined}>
+            {hasSpecificMonth && (
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: '10px 12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', marginBottom: 6 }}>
+                  {DIAS_SEMANA.map((d, i) => <div className="ag-dh" key={i}>{d}</div>)}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '2px 0' }}>
+                  {calendarCells.map((d, i) => {
+                    if (d === null) return <div key={i} className="ag-cell empty" />;
+                    const ds = dateStr(d);
+                    const hasShow = eventsByDate.has(ds);
+                    const isToday = ds === today;
+                    return (
+                      <div
+                        key={i}
+                        className={`ag-cell${isToday ? ' today' : ''}${hasShow ? ' has-show' : ''}`}
+                        onClick={() => openGantt(ds)}
+                      >
+                        {d}
+                        {hasShow && <span className="ag-dot" />}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: '2px 0' }}>
-                {calendarCells.map((d, i) => {
-                  if (d === null) return <div key={i} className="ag-cell empty" />;
-                  const ds = dateStr(d);
-                  const hasShow = eventsByDate.has(ds);
-                  const isToday = ds === today;
-                  return (
-                    <div
-                      key={i}
-                      className={`ag-cell${isToday ? ' today' : ''}${hasShow ? ' has-show' : ''}`}
-                      onClick={() => openGantt(ds)}
-                    >
-                      {d}
-                      {hasShow && <span className="ag-dot" />}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            )}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <div style={{ fontSize: 14, fontWeight: 700 }}>Shows Filtrados</div>
                 <span onClick={() => navigate('/eventos')} style={{ fontSize: 12, color: 'var(--brand-ink)', cursor: 'pointer', fontWeight: 600 }}>VER TODOS</span>
               </div>
               <div>
-                {monthEventos.length === 0 && <div className="faint">Nenhum show neste mês.</div>}
+                {monthEventos.length === 0 && <div className="faint">Nenhum show encontrado.</div>}
                 {monthEventos.map((ev) => {
                   const d = parseDateLocal(ev.date);
                   return (
