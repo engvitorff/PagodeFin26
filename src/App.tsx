@@ -40,8 +40,8 @@ export default function App() {
                     <Route path="/musicos" element={<Musicos />} />
                     <Route path="/contratos" element={<Contratos />} />
                     <Route path="/contratos/novo" element={<GerarContrato />} />
-                    <Route path="/relatorio" element={<Relatorio />} />
                   </Route>
+                  <Route path="/relatorio" element={<Relatorio />} />
                   <Route path="/agenda" element={<MinhaAgenda />} />
                   <Route path="/config" element={<Config />} />
                 </Route>

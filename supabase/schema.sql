@@ -606,6 +606,116 @@ $$;
 
 grant execute on function get_my_agenda() to authenticated;
 
+-- Relatório pessoal do músico vinculado à conta que está chamando: mesmo
+-- escopo de dados que get_my_agenda(), mas com bruto/descontos separados
+-- (em vez de já líquido) e o status do evento (A receber/Recebido), pra
+-- alimentar os filtros e totais da tela de Relatório sem nunca expor
+-- faturamento do evento nem valor de outros músicos.
+create or replace function get_my_relatorio()
+returns table (
+  evento_id uuid,
+  event_date date,
+  event_status text,
+  contractor_name text,
+  bruto_cents bigint,
+  descontos_cents bigint,
+  payment_status text
+)
+language plpgsql
+security definer
+stable
+set search_path = public, extensions
+as $$
+declare
+  v_musico_id uuid;
+  v_musico_role text;
+  v_group_id uuid;
+begin
+  select m.id, m.role, m.group_id into v_musico_id, v_musico_role, v_group_id
+  from musicos m where m.user_id = auth.uid() limit 1;
+
+  if v_musico_id is null then
+    return;
+  end if;
+
+  return query
+  with custom_totals as (
+    select ce.evento_id, sum(ce.cents) as total
+    from custom_expenses ce
+    join eventos e on e.id = ce.evento_id
+    where e.group_id = v_group_id
+    group by ce.evento_id
+  ),
+  freelancer_totals as (
+    select sm.evento_id, sum(greatest(0, sm.fee_override_cents - sm.other_expenses_cents)) as total
+    from scheduled_musicians sm
+    join musicos m on m.id = sm.musician_id
+    where m.group_id = v_group_id and m.role = 'Freelancer'
+    group by sm.evento_id
+  ),
+  socio_counts as (
+    select sm.evento_id, count(*) as total
+    from scheduled_musicians sm
+    join musicos m on m.id = sm.musician_id
+    where m.group_id = v_group_id and m.role = 'Sócio'
+    group by sm.evento_id
+  ),
+  lucro_calc as (
+    select
+      e.id as evento_id,
+      (e.total_value_cents - e.operational_expenses_cents - coalesce(ct.total, 0) - coalesce(ft.total, 0))::numeric as lucro,
+      coalesce(sc.total, 0) as num_socios,
+      e.band_fund_mode,
+      e.band_fund_cents,
+      e.band_fund_percent,
+      e.band_fund_percent_base,
+      e.total_value_cents
+    from eventos e
+    left join custom_totals ct on ct.evento_id = e.id
+    left join freelancer_totals ft on ft.evento_id = e.id
+    left join socio_counts sc on sc.evento_id = e.id
+    where e.group_id = v_group_id
+  ),
+  bordero as (
+    select
+      lc.evento_id,
+      case
+        when lc.band_fund_mode = 'auto' then floor(lc.lucro / (lc.num_socios + 1))
+        when lc.num_socios > 0 then
+          floor(
+            (lc.lucro - (
+              case
+                when lc.band_fund_mode = 'percentual' then
+                  floor(
+                    (case when lc.band_fund_percent_base = 'venda' then lc.total_value_cents else lc.lucro end)::numeric
+                    * coalesce(lc.band_fund_percent, 0) / 100
+                  )
+                else lc.band_fund_cents
+              end
+            )) / lc.num_socios
+          )
+        else 0
+      end as cota_socio
+    from lucro_calc lc
+  )
+  select
+    e.id,
+    e.date,
+    e.status,
+    e.contractor_name,
+    (case when v_musico_role = 'Sócio' then greatest(0, b.cota_socio) else sm.fee_override_cents end)::bigint as bruto_cents,
+    sm.other_expenses_cents::bigint as descontos_cents,
+    sm.payment_status
+  from scheduled_musicians sm
+  join eventos e on e.id = sm.evento_id
+  join bordero b on b.evento_id = e.id
+  where sm.musician_id = v_musico_id and e.group_id = v_group_id
+  order by e.date desc;
+end;
+$$;
+
+grant execute on function get_my_relatorio() to authenticated;
+
 -- ── Correções de segurança (revisão adversarial) ─────────────
 -- (a exposição de password_hash foi corrigida acima, movendo a coluna pra
 -- tabela group_secrets — um REVOKE de coluna sozinho não bastava.)

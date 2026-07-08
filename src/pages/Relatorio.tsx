@@ -1,25 +1,80 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/ui/Icon';
+import { useAuth } from '@/context/AuthContext';
 import { useAppData } from '@/context/AppDataContext';
+import { supabase } from '@/lib/supabase';
 import { calcBordero } from '@/lib/calc';
 import { fmt, fmtDate, mesLabel, parseDateLocal } from '@/lib/format';
 
 type StatusFilter = 'todos' | 'receber' | 'recebido';
 
+interface BaseRow {
+  eventoId: string;
+  date: string;
+  status: string; // status do evento (A receber/Recebido)
+  contractorName: string;
+  bruto: number;
+  descontos: number;
+  paymentStatus: string; // Pago/Pendente do próprio músico naquele show
+  clickable: boolean;
+}
+
+interface MeuRelatorioRow {
+  evento_id: string;
+  event_date: string;
+  event_status: string;
+  contractor_name: string;
+  bruto_cents: number;
+  descontos_cents: number;
+  payment_status: string;
+}
+
+// Tela dupla: Admin vê o relatório de qualquer músico do elenco (seletor +
+// dados completos, já em memória via useAppData). Papel "View" (músico do
+// elenco com acesso restrito) vê só a própria conta, sem seletor — a RLS
+// bloqueia leitura direta de eventos/músicos pra esse papel, então os dados
+// vêm de get_my_relatorio() (RPC security definer, mesmo padrão de
+// MinhaAgenda), que nunca devolve faturamento do evento nem valor de
+// outros músicos.
 export function Relatorio() {
-  const { eventos, musicos } = useAppData();
+  const { group } = useAuth();
   const navigate = useNavigate();
-  const [musicoId, setMusicoId] = useState(musicos[0]?.id ?? '');
+  const isAdmin = group?.role === 'Admin';
+  const { eventos, musicos } = useAppData();
+
+  const [musicoId, setMusicoId] = useState('');
   const [ano, setAno] = useState('all');
   const [mes, setMes] = useState('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos');
 
-  const anos = useMemo(() => {
-    const s = new Set<string>();
-    eventos.forEach((e) => s.add(String(parseDateLocal(e.date).getFullYear())));
-    return Array.from(s).sort();
-  }, [eventos]);
+  const [viewLoading, setViewLoading] = useState(!isAdmin);
+  const [viewMusico, setViewMusico] = useState<{ id: string; name: string } | null>(null);
+  const [viewRows, setViewRows] = useState<MeuRelatorioRow[]>([]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      setMusicoId((cur) => cur || musicos[0]?.id || '');
+      return;
+    }
+    let active = true;
+    (async () => {
+      const { data: musicoData } = await supabase.rpc('get_my_musico');
+      const meu = (musicoData as { id: string; name: string }[] | null)?.[0] ?? null;
+      if (!active) return;
+      setViewMusico(meu);
+      if (meu) {
+        const { data: relatorioData } = await supabase.rpc('get_my_relatorio');
+        if (!active) return;
+        setViewRows((relatorioData as MeuRelatorioRow[] | null) ?? []);
+      }
+      if (active) setViewLoading(false);
+    })();
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin]);
 
   function matchesStatus(status: string): boolean {
     if (statusFilter === 'receber') return status === 'A receber';
@@ -27,30 +82,49 @@ export function Relatorio() {
     return true;
   }
 
+  const baseRows: BaseRow[] = useMemo(() => {
+    if (isAdmin) {
+      const musico = musicos.find((m) => m.id === musicoId);
+      if (!musico) return [];
+      return eventos
+        .filter((ev) => ev.scheduledMusicians.some((s) => s.musicianId === musicoId))
+        .map((ev) => {
+          const schedule = ev.scheduledMusicians.find((s) => s.musicianId === musicoId)!;
+          const bordero = calcBordero(ev, musicos);
+          const bruto = musico.role === 'Sócio' ? Math.max(0, bordero.cotaSocio) : schedule.feeOverrideCents;
+          return {
+            eventoId: ev.id, date: ev.date, status: ev.status, contractorName: ev.contractorName,
+            bruto, descontos: schedule.otherExpensesCents, paymentStatus: schedule.paymentStatus, clickable: true,
+          };
+        });
+    }
+    return viewRows.map((r) => ({
+      eventoId: r.evento_id, date: r.event_date, status: r.event_status, contractorName: r.contractor_name,
+      bruto: r.bruto_cents, descontos: r.descontos_cents, paymentStatus: r.payment_status, clickable: false,
+    }));
+  }, [isAdmin, eventos, musicos, musicoId, viewRows]);
+
+  const anos = useMemo(() => {
+    const s = new Set<string>();
+    baseRows.forEach((r) => s.add(String(parseDateLocal(r.date).getFullYear())));
+    return Array.from(s).sort();
+  }, [baseRows]);
+
   // Toda a tela deriva de `rows` (totais, gráfico e lista), então o filtro de
-  // status entra aqui, junto com músico/ano/mês, e o resto acompanha sozinho.
+  // status entra aqui, junto com ano/mês, e o resto acompanha sozinho.
   const rows = useMemo(() => {
-    const musico = musicos.find((m) => m.id === musicoId);
-    if (!musico) return [];
-    return eventos
-      .filter((ev) => {
-        const d = parseDateLocal(ev.date);
+    return baseRows
+      .filter((r) => {
+        const d = parseDateLocal(r.date);
         if (ano !== 'all' && String(d.getFullYear()) !== ano) return false;
         if (mes !== 'all' && String(d.getMonth() + 1).padStart(2, '0') !== mes) return false;
-        if (!matchesStatus(ev.status)) return false;
-        return ev.scheduledMusicians.some((s) => s.musicianId === musicoId);
+        if (!matchesStatus(r.status)) return false;
+        return true;
       })
-      .map((ev) => {
-        const schedule = ev.scheduledMusicians.find((s) => s.musicianId === musicoId)!;
-        const bordero = calcBordero(ev, musicos);
-        const bruto = musico.role === 'Sócio' ? Math.max(0, bordero.cotaSocio) : schedule.feeOverrideCents;
-        const descontos = schedule.otherExpensesCents;
-        const liquido = Math.max(0, bruto - descontos);
-        return { evento: ev, bruto, descontos, liquido, status: schedule.paymentStatus };
-      })
-      .sort((a, b) => b.evento.date.localeCompare(a.evento.date));
+      .map((r) => ({ ...r, liquido: Math.max(0, r.bruto - r.descontos) }))
+      .sort((a, b) => b.date.localeCompare(a.date));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventos, musicos, musicoId, ano, mes, statusFilter]);
+  }, [baseRows, ano, mes, statusFilter]);
 
   const totals = rows.reduce(
     (acc, r) => ({ bruto: acc.bruto + r.bruto, descontos: acc.descontos + r.descontos, liquido: acc.liquido + r.liquido }),
@@ -58,25 +132,44 @@ export function Relatorio() {
   );
   const maxBar = Math.max(1, totals.bruto, totals.descontos, totals.liquido);
 
+  const nomeAtual = isAdmin ? musicos.find((m) => m.id === musicoId)?.name : viewMusico?.name;
+
   function handleExport() {
-    const musico = musicos.find((m) => m.id === musicoId);
-    const lines = rows.map((r) => `${r.evento.date} | ${r.evento.contractorName} | ${fmt(r.bruto)} | ${fmt(r.descontos)} | ${fmt(r.liquido)} | ${r.status}`);
-    const content = [`Relatório - ${musico?.name}`, ...lines].join('\n');
+    const lines = rows.map((r) => `${r.date} | ${r.contractorName} | ${fmt(r.bruto)} | ${fmt(r.descontos)} | ${fmt(r.liquido)} | ${r.paymentStatus}`);
+    const content = [`Relatório - ${nomeAtual ?? ''}`, ...lines].join('\n');
     const blob = new Blob([content], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `relatorio-${musico?.name ?? 'musico'}.txt`;
+    a.download = `relatorio-${nomeAtual ?? 'musico'}.txt`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  if (!isAdmin && viewLoading) {
+    return <div className="faint">Carregando relatório...</div>;
+  }
+
+  if (!isAdmin && !viewMusico) {
+    return (
+      <div className="card">
+        <div className="faint">
+          Você ainda não foi vinculado a um músico do elenco. Peça para um Admin do grupo fazer esse vínculo.
+        </div>
+      </div>
+    );
   }
 
   return (
     <div>
       <div className="rel-filters mb16">
-        <select value={musicoId} onChange={(e) => setMusicoId(e.target.value)} className="rel-filter">
-          {musicos.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
+        {isAdmin ? (
+          <select value={musicoId} onChange={(e) => setMusicoId(e.target.value)} className="rel-filter">
+            {musicos.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+          </select>
+        ) : (
+          <div className="rel-filter" style={{ display: 'flex', alignItems: 'center', fontWeight: 600 }}>{viewMusico?.name}</div>
+        )}
         <select value={ano} onChange={(e) => setAno(e.target.value)} className="rel-filter">
           <option value="all">Todos os anos</option>
           {anos.map((a) => <option key={a} value={a}>{a}</option>)}
@@ -136,18 +229,23 @@ export function Relatorio() {
       <div>
         {rows.length === 0 && <div className="faint">Nenhum show encontrado para este período.</div>}
         {rows.map((r) => {
-          const d = parseDateLocal(r.evento.date);
+          const d = parseDateLocal(r.date);
           return (
-            <div key={r.evento.id} className="ag-show-card" onClick={() => navigate(`/eventos/${r.evento.id}`)}>
+            <div
+              key={r.eventoId}
+              className="ag-show-card"
+              style={r.clickable ? undefined : { cursor: 'default' }}
+              onClick={r.clickable ? () => navigate(`/eventos/${r.eventoId}`) : undefined}
+            >
               <div className="ag-date-badge">
                 <div className="mo">{mesLabel(d.getMonth())}</div>
                 <div className="dy">{d.getDate()}</div>
               </div>
               <div className="grow">
-                <div className="row-name">{r.evento.contractorName}</div>
-                <div className="row-sub">{fmtDate(r.evento.date)} · Cachê {fmt(r.bruto)} · Descontos {fmt(r.descontos)}</div>
+                <div className="row-name">{r.contractorName}</div>
+                <div className="row-sub">{fmtDate(r.date)} · Cachê {fmt(r.bruto)} · Descontos {fmt(r.descontos)}</div>
               </div>
-              <span className={`badge ${r.status === 'Pago' ? 'badge-ok' : 'badge-warn'}`}>{r.status}</span>
+              <span className={`badge ${r.paymentStatus === 'Pago' ? 'badge-ok' : 'badge-warn'}`}>{r.paymentStatus}</span>
             </div>
           );
         })}

@@ -22,10 +22,14 @@ const NAV_ITEMS: NavItem[] = [
 
 const CONFIG_ITEM: NavItem = { path: '/config', icon: 'settings', label: 'Configurações' };
 
-// Papel "View" (músico do elenco com acesso restrito): só enxerga a própria
-// agenda. Config continua sempre acessível (sidebar-foot no desktop / menu
-// "Outros" no mobile).
-const VIEW_NAV_ITEMS: NavItem[] = [{ path: '/agenda', icon: 'calendar', label: 'Minha Agenda', pinned: true }];
+// Papel "View" (músico do elenco com acesso restrito): enxerga a própria
+// agenda e um Relatório (só com os próprios shows/valores — ver
+// get_my_relatorio() no schema). Config continua sempre acessível
+// (sidebar-foot no desktop / menu "Outros" no mobile).
+const VIEW_NAV_ITEMS: NavItem[] = [
+  { path: '/agenda', icon: 'calendar', label: 'Minha Agenda', pinned: true },
+  { path: '/relatorio', icon: 'chart', label: 'Relatório' },
+];
 
 const PANE_TITLES: Record<string, string> = {
   '/painel': 'Painel',
