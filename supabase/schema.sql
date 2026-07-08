@@ -543,27 +543,46 @@ begin
     where m.group_id = v_group_id and m.role = 'Sócio'
     group by sm.evento_id
   ),
-  bordero as (
+  lucro_calc as (
     select
       e.id as evento_id,
-      case when e.is_band_fund_auto then
-        floor(
-          (e.total_value_cents - e.operational_expenses_cents - coalesce(ct.total, 0) - coalesce(ft.total, 0))::numeric
-          / (coalesce(sc.total, 0) + 1)
-        )
-      else
-        case when coalesce(sc.total, 0) > 0 then
-          floor(
-            (e.total_value_cents - e.operational_expenses_cents - coalesce(ct.total, 0) - coalesce(ft.total, 0) - e.band_fund_cents)::numeric
-            / sc.total
-          )
-        else 0 end
-      end as cota_socio
+      (e.total_value_cents - e.operational_expenses_cents - coalesce(ct.total, 0) - coalesce(ft.total, 0))::numeric as lucro,
+      coalesce(sc.total, 0) as num_socios,
+      e.band_fund_mode,
+      e.band_fund_cents,
+      e.band_fund_percent,
+      e.band_fund_percent_base,
+      e.total_value_cents
     from eventos e
     left join custom_totals ct on ct.evento_id = e.id
     left join freelancer_totals ft on ft.evento_id = e.id
     left join socio_counts sc on sc.evento_id = e.id
     where e.group_id = v_group_id
+  ),
+  -- Mesma lógica de calcBordero (src/lib/calc.ts): Auto reparte o lucro
+  -- entre sócios + banda; Manual/Percentual primeiro reservam o caixa da
+  -- banda (fixo ou % da Venda/Saldo Rateio) e dividem o resto só entre sócios.
+  bordero as (
+    select
+      lc.evento_id,
+      case
+        when lc.band_fund_mode = 'auto' then floor(lc.lucro / (lc.num_socios + 1))
+        when lc.num_socios > 0 then
+          floor(
+            (lc.lucro - (
+              case
+                when lc.band_fund_mode = 'percentual' then
+                  floor(
+                    (case when lc.band_fund_percent_base = 'venda' then lc.total_value_cents else lc.lucro end)::numeric
+                    * coalesce(lc.band_fund_percent, 0) / 100
+                  )
+                else lc.band_fund_cents
+              end
+            )) / lc.num_socios
+          )
+        else 0
+      end as cota_socio
+    from lucro_calc lc
   )
   select
     e.id,
