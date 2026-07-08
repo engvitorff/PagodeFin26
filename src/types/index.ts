@@ -28,6 +28,9 @@ export interface ScheduledMusician {
   paidViaTeam?: boolean;
 }
 
+export type BandFundMode = 'auto' | 'manual' | 'percentual';
+export type BandFundPercentBase = 'venda' | 'saldo';
+
 export interface Evento {
   id: string;
   contractorName: string;
@@ -40,7 +43,11 @@ export interface Evento {
   operationalExpensesCents: number;
   customExpenses: CustomExpense[];
   bandFundCents: number;
-  isBandFundAuto: boolean;
+  bandFundMode: BandFundMode;
+  /** % (ex.: 15 = 15%), só usado quando bandFundMode === 'percentual'. */
+  bandFundPercent: number | null;
+  /** 'venda' = total_value_cents; 'saldo' = lucro (Saldo Rateio). */
+  bandFundPercentBase: BandFundPercentBase | null;
   scheduledMusicians: ScheduledMusician[];
 }
 

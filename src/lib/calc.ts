@@ -39,12 +39,17 @@ export function calcBordero(ev: Evento, musicos: Musico[]): Bordero {
   let caixaBanda: number;
   let cotaSocio: number;
 
-  if (ev.isBandFundAuto) {
+  if (ev.bandFundMode === 'auto') {
     const numCotistas = numSocios + 1;
     cotaSocio = numCotistas > 0 ? Math.floor(lucro / numCotistas) : 0;
     caixaBanda = cotaSocio;
   } else {
-    caixaBanda = ev.bandFundCents;
+    if (ev.bandFundMode === 'percentual') {
+      const base = ev.bandFundPercentBase === 'venda' ? ev.totalValueCents : lucro;
+      caixaBanda = Math.floor((base * (ev.bandFundPercent ?? 0)) / 100);
+    } else {
+      caixaBanda = ev.bandFundCents;
+    }
     cotaSocio = numSocios > 0 ? Math.floor((lucro - caixaBanda) / numSocios) : 0;
   }
 

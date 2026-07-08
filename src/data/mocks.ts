@@ -21,7 +21,9 @@ export const EVENTOS: Evento[] = [
     operationalExpensesCents: 0,
     customExpenses: [],
     bandFundCents: 0,
-    isBandFundAuto: true,
+    bandFundMode: 'auto',
+    bandFundPercent: null,
+    bandFundPercentBase: null,
     scheduledMusicians: [
       { id: 's1', musicianId: 'm1', feeOverrideCents: 0, otherExpensesCents: 0, paymentStatus: 'Pago' },
       { id: 's2', musicianId: 'm2', feeOverrideCents: 0, otherExpensesCents: 5000, paymentStatus: 'Pendente' },
@@ -41,7 +43,9 @@ export const EVENTOS: Evento[] = [
     operationalExpensesCents: 15000,
     customExpenses: [{ id: 'ce1', name: 'Combustível', cents: 8000 }],
     bandFundCents: 0,
-    isBandFundAuto: true,
+    bandFundMode: 'auto',
+    bandFundPercent: null,
+    bandFundPercentBase: null,
     scheduledMusicians: [
       { id: 's5', musicianId: 'm1', feeOverrideCents: 0, otherExpensesCents: 0, paymentStatus: 'Pendente' },
       { id: 's6', musicianId: 'm2', feeOverrideCents: 0, otherExpensesCents: 0, paymentStatus: 'Pendente' },
@@ -60,7 +64,9 @@ export const EVENTOS: Evento[] = [
     operationalExpensesCents: 20000,
     customExpenses: [],
     bandFundCents: 0,
-    isBandFundAuto: true,
+    bandFundMode: 'auto',
+    bandFundPercent: null,
+    bandFundPercentBase: null,
     scheduledMusicians: [
       { id: 's8', musicianId: 'm1', feeOverrideCents: 0, otherExpensesCents: 0, paymentStatus: 'Pago' },
       { id: 's9', musicianId: 'm2', feeOverrideCents: 0, otherExpensesCents: 0, paymentStatus: 'Pago' },

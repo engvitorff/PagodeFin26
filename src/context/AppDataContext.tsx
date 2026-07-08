@@ -54,7 +54,9 @@ function mapEventoRow(row: any): Evento {
     status: row.status,
     operationalExpensesCents: row.operational_expenses_cents,
     bandFundCents: row.band_fund_cents,
-    isBandFundAuto: row.is_band_fund_auto,
+    bandFundMode: row.band_fund_mode,
+    bandFundPercent: row.band_fund_percent,
+    bandFundPercentBase: row.band_fund_percent_base,
     customExpenses: (row.custom_expenses ?? []).map((ce: any) => ({ id: ce.id, name: ce.name, cents: ce.cents })),
     scheduledMusicians: (row.scheduled_musicians ?? []).map((s: any) => ({
       id: s.id,
@@ -187,7 +189,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         status: e.status,
         operational_expenses_cents: e.operationalExpensesCents,
         band_fund_cents: e.bandFundCents,
-        is_band_fund_auto: e.isBandFundAuto,
+        band_fund_mode: e.bandFundMode,
+        band_fund_percent: e.bandFundPercent,
+        band_fund_percent_base: e.bandFundPercentBase,
       })
       .select()
       .single();
@@ -228,7 +232,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     if (patch.status !== undefined) dbPatch.status = patch.status;
     if (patch.operationalExpensesCents !== undefined) dbPatch.operational_expenses_cents = patch.operationalExpensesCents;
     if (patch.bandFundCents !== undefined) dbPatch.band_fund_cents = patch.bandFundCents;
-    if (patch.isBandFundAuto !== undefined) dbPatch.is_band_fund_auto = patch.isBandFundAuto;
+    if (patch.bandFundMode !== undefined) dbPatch.band_fund_mode = patch.bandFundMode;
+    if (patch.bandFundPercent !== undefined) dbPatch.band_fund_percent = patch.bandFundPercent;
+    if (patch.bandFundPercentBase !== undefined) dbPatch.band_fund_percent_base = patch.bandFundPercentBase;
 
     const { error } = await supabase.from('eventos').update(dbPatch).eq('id', id);
     if (reportError(error)) return;

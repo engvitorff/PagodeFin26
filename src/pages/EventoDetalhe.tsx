@@ -7,9 +7,21 @@ import { useAppData } from '@/context/AppDataContext';
 import { avatarColor, calcBordero, initials } from '@/lib/calc';
 import { DESPESA_AVULSA_PRESETS } from '@/data/mocks';
 import { fmt, fmtDate, parseCents } from '@/lib/format';
-import type { EventStatus } from '@/types';
+import type { BandFundMode, BandFundPercentBase, EventStatus } from '@/types';
 
 const OUTRO_DESPESA = '__outro__';
+
+function nextBandFundMode(mode: BandFundMode): BandFundMode {
+  if (mode === 'auto') return 'manual';
+  if (mode === 'manual') return 'percentual';
+  return 'auto';
+}
+
+function bandFundModeLabel(mode: BandFundMode): string {
+  if (mode === 'auto') return 'Auto ✓';
+  if (mode === 'manual') return 'Manual';
+  return '%';
+}
 
 /**
  * Input monetário com estado local: digitação livre (sem reformatar a cada
@@ -34,6 +46,33 @@ function MoneyInput({ cents, onCommit }: { cents: number; onCommit: (cents: numb
       onBlur={(e) => {
         setFocused(false);
         onCommit(parseCents(e.target.value));
+      }}
+    />
+  );
+}
+
+/** Mesmo padrão do MoneyInput (estado local, persiste só no blur), pra um percentual (ex.: 15 = 15%). */
+function PercentInput({ value, onCommit }: { value: number | null; onCommit: (value: number | null) => void }) {
+  const [local, setLocal] = useState(value !== null ? String(value) : '');
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => {
+    if (!focused) setLocal(value !== null ? String(value) : '');
+  }, [value, focused]);
+
+  return (
+    <input
+      type="number"
+      step="0.01"
+      placeholder="0"
+      value={local}
+      onFocus={() => setFocused(true)}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={(e) => {
+        setFocused(false);
+        const raw = e.target.value.trim();
+        const num = raw === '' ? null : Number(raw);
+        onCommit(num !== null && !isNaN(num) ? num : null);
       }}
     />
   );
@@ -139,19 +178,51 @@ export function EventoDetalhe() {
             <button
               className="btn btn-sm"
               style={{ padding: '2px 7px', fontSize: 10, height: 'auto' }}
-              onClick={() => updateEvento(ev.id, { isBandFundAuto: !ev.isBandFundAuto })}
+              onClick={() => {
+                const next = nextBandFundMode(ev.bandFundMode);
+                updateEvento(ev.id, {
+                  bandFundMode: next,
+                  // 1ª vez entrando em "percentual": fixa uma base padrão, senão o
+                  // cálculo cairia em "Saldo Rateio" (null !== 'venda') enquanto a
+                  // tela mostraria "Venda" selecionada por padrão.
+                  ...(next === 'percentual' && ev.bandFundPercentBase === null ? { bandFundPercentBase: 'venda' as const } : {}),
+                });
+              }}
             >
-              {ev.isBandFundAuto ? 'Auto ✓' : 'Manual'}
+              {bandFundModeLabel(ev.bandFundMode)}
             </button>
           </div>
-          {ev.isBandFundAuto ? (
+          {ev.bandFundMode === 'auto' && (
             <input type="number" readOnly value={(bordero.caixaBanda / 100).toFixed(2)} />
-          ) : (
+          )}
+          {ev.bandFundMode === 'manual' && (
             <MoneyInput
               key={`fund-${ev.id}`}
               cents={ev.bandFundCents}
               onCommit={(cents) => updateEvento(ev.id, { bandFundCents: cents })}
             />
+          )}
+          {ev.bandFundMode === 'percentual' && (
+            <div>
+              <div className="row gap8 mb6">
+                <select
+                  style={{ flex: 1 }}
+                  value={ev.bandFundPercentBase ?? 'venda'}
+                  onChange={(e) => updateEvento(ev.id, { bandFundPercentBase: e.target.value as BandFundPercentBase })}
+                >
+                  <option value="venda">Venda</option>
+                  <option value="saldo">Saldo Rateio</option>
+                </select>
+                <div style={{ width: 90, position: 'relative' }}>
+                  <PercentInput
+                    key={`fund-pct-${ev.id}`}
+                    value={ev.bandFundPercent}
+                    onCommit={(value) => updateEvento(ev.id, { bandFundPercent: value })}
+                  />
+                </div>
+              </div>
+              <input type="number" readOnly value={(bordero.caixaBanda / 100).toFixed(2)} />
+            </div>
           )}
         </div>
         <div>

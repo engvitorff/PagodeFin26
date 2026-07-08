@@ -139,7 +139,9 @@ function NovoEventoModal({ onClose, onSave }: { onClose: () => void; onSave: (pa
       operationalExpensesCents: 0,
       customExpenses: [],
       bandFundCents: 0,
-      isBandFundAuto: auto,
+      bandFundMode: auto ? 'auto' : 'manual',
+      bandFundPercent: null,
+      bandFundPercentBase: null,
     });
   }
 

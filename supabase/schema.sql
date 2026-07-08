@@ -627,3 +627,27 @@ end;
 $$;
 
 grant execute on function create_group(text, text) to authenticated;
+
+-- ── Caixa (Fundo): 3º modo de cálculo (percentual) ───────────
+-- Além de Auto (divide o saldo em partes iguais entre os sócios + banda) e
+-- Manual (valor fixo digitado), agora existe "percentual": um % de "Venda"
+-- (total_value_cents) ou "Saldo Rateio" (o lucro depois de custos/
+-- freelancers, antes da divisão entre sócios). Substitui is_band_fund_auto
+-- (boolean) por um modo com 3 valores; a leitura é sempre dinâmica (o app
+-- recalcula band_fund_cents a partir de band_fund_percent/_base toda vez
+-- que o evento é aberto, igual o Auto já fazia).
+alter table eventos add column if not exists band_fund_mode text not null default 'auto';
+alter table eventos add column if not exists band_fund_percent numeric;
+alter table eventos add column if not exists band_fund_percent_base text;
+
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_name = 'eventos' and column_name = 'is_band_fund_auto'
+  ) then
+    update eventos set band_fund_mode = 'manual' where is_band_fund_auto = false;
+  end if;
+end $$;
+
+alter table eventos drop column if exists is_band_fund_auto;
