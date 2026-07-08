@@ -12,18 +12,16 @@ type StatusFilter = 'todos' | 'receber' | 'recebido';
 interface BaseRow {
   eventoId: string;
   date: string;
-  status: string; // status do evento (A receber/Recebido)
   contractorName: string;
   bruto: number;
   descontos: number;
-  paymentStatus: string; // Pago/Pendente do próprio músico naquele show
+  paymentStatus: string; // Pago/Pendente do próprio músico naquele show — é o que os filtros usam
   clickable: boolean;
 }
 
 interface MeuRelatorioRow {
   evento_id: string;
   event_date: string;
-  event_status: string;
   contractor_name: string;
   bruto_cents: number;
   descontos_cents: number;
@@ -76,9 +74,13 @@ export function Relatorio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAdmin]);
 
-  function matchesStatus(status: string): boolean {
-    if (statusFilter === 'receber') return status === 'A receber';
-    if (statusFilter === 'recebido') return status === 'Recebido';
+  // O filtro reflete se o MÚSICO já recebeu o cachê dele naquele show
+  // (paymentStatus: Pago/Pendente — o mesmo badge exibido no card), não se
+  // o contratante já pagou o evento como um todo (isso é outro status,
+  // do evento, que não aparece aqui).
+  function matchesStatus(paymentStatus: string): boolean {
+    if (statusFilter === 'receber') return paymentStatus === 'Pendente';
+    if (statusFilter === 'recebido') return paymentStatus === 'Pago';
     return true;
   }
 
@@ -93,13 +95,13 @@ export function Relatorio() {
           const bordero = calcBordero(ev, musicos);
           const bruto = musico.role === 'Sócio' ? Math.max(0, bordero.cotaSocio) : schedule.feeOverrideCents;
           return {
-            eventoId: ev.id, date: ev.date, status: ev.status, contractorName: ev.contractorName,
+            eventoId: ev.id, date: ev.date, contractorName: ev.contractorName,
             bruto, descontos: schedule.otherExpensesCents, paymentStatus: schedule.paymentStatus, clickable: true,
           };
         });
     }
     return viewRows.map((r) => ({
-      eventoId: r.evento_id, date: r.event_date, status: r.event_status, contractorName: r.contractor_name,
+      eventoId: r.evento_id, date: r.event_date, contractorName: r.contractor_name,
       bruto: r.bruto_cents, descontos: r.descontos_cents, paymentStatus: r.payment_status, clickable: false,
     }));
   }, [isAdmin, eventos, musicos, musicoId, viewRows]);
@@ -118,7 +120,7 @@ export function Relatorio() {
         const d = parseDateLocal(r.date);
         if (ano !== 'all' && String(d.getFullYear()) !== ano) return false;
         if (mes !== 'all' && String(d.getMonth() + 1).padStart(2, '0') !== mes) return false;
-        if (!matchesStatus(r.status)) return false;
+        if (!matchesStatus(r.paymentStatus)) return false;
         return true;
       })
       .map((r) => ({ ...r, liquido: Math.max(0, r.bruto - r.descontos) }))
