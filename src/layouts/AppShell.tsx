@@ -5,32 +5,27 @@ import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useAppData } from '@/context/AppDataContext';
 
-const NAV_ITEMS = [
-  { path: '/painel', icon: 'home', label: 'Painel' },
-  { path: '/eventos', icon: 'calendar', label: 'Eventos' },
-  { path: '/caixa', icon: 'wallet', label: 'Caixa' },
-  { path: '/musicos', icon: 'users', label: 'Músicos' },
+type NavItem = { path: string; icon: string; label: string; pinned?: boolean };
+
+// Itens do menu principal (sidebar desktop, adicionados em cascata). Os
+// marcados como `pinned` ficam fixos no rodapé mobile; qualquer aba nova
+// entra aqui sem `pinned` e cai automaticamente dentro do menu "Outros" no
+// mobile, sem precisar mexer em mais nada.
+const NAV_ITEMS: NavItem[] = [
+  { path: '/painel', icon: 'home', label: 'Painel', pinned: true },
+  { path: '/eventos', icon: 'calendar', label: 'Eventos', pinned: true },
+  { path: '/caixa', icon: 'wallet', label: 'Caixa', pinned: true },
+  { path: '/musicos', icon: 'users', label: 'Músicos', pinned: true },
   { path: '/contratos', icon: 'file', label: 'Contratos' },
   { path: '/relatorio', icon: 'chart', label: 'Relatório' },
 ];
 
-const BOTTOM_NAV_ITEMS = [
-  { path: '/painel', icon: 'home', label: 'Painel' },
-  { path: '/eventos', icon: 'calendar', label: 'Eventos' },
-  { path: '/caixa', icon: 'wallet', label: 'Caixa' },
-  { path: '/musicos', icon: 'users', label: 'Músicos' },
-  { path: '/config', icon: 'settings', label: 'Config' },
-];
+const CONFIG_ITEM: NavItem = { path: '/config', icon: 'settings', label: 'Configurações' };
 
 // Papel "View" (músico do elenco com acesso restrito): só enxerga a própria
-// agenda. Config continua sempre visível pra qualquer papel (renderizado à
-// parte no sidebar-foot / incluído aqui só para o bottomnav do mobile).
-const VIEW_NAV_ITEMS = [{ path: '/agenda', icon: 'calendar', label: 'Minha Agenda' }];
-
-const VIEW_BOTTOM_NAV_ITEMS = [
-  { path: '/agenda', icon: 'calendar', label: 'Minha Agenda' },
-  { path: '/config', icon: 'settings', label: 'Config' },
-];
+// agenda. Config continua sempre acessível (sidebar-foot no desktop / menu
+// "Outros" no mobile).
+const VIEW_NAV_ITEMS: NavItem[] = [{ path: '/agenda', icon: 'calendar', label: 'Minha Agenda', pinned: true }];
 
 const PANE_TITLES: Record<string, string> = {
   '/painel': 'Painel',
@@ -64,13 +59,21 @@ export function AppShell() {
   const { loadingData } = useAppData();
   const [dropOpen, setDropOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const isAdmin = group?.role === 'Admin';
   const navItems = isAdmin ? NAV_ITEMS : VIEW_NAV_ITEMS;
-  const bottomNavItems = isAdmin ? BOTTOM_NAV_ITEMS : VIEW_BOTTOM_NAV_ITEMS;
+  const pinnedNavItems = navItems.filter((item) => item.pinned);
+  const moreNavItems = [...navItems.filter((item) => !item.pinned), CONFIG_ITEM];
+  const isMoreActive = moreNavItems.some((item) => isActive(item.path, pathname));
 
   async function handleLogout() {
     await logout();
     navigate('/login');
+  }
+
+  function goFromDrawer(path: string) {
+    setMoreOpen(false);
+    navigate(path);
   }
 
   return (
@@ -181,7 +184,7 @@ export function AppShell() {
       </div>
 
       <nav className="bottomnav">
-        {bottomNavItems.map((item) => (
+        {pinnedNavItems.map((item) => (
           <div
             key={item.path}
             className={`nb${isActive(item.path, pathname) ? ' active' : ''}`}
@@ -191,7 +194,47 @@ export function AppShell() {
             {item.label}
           </div>
         ))}
+        <div className={`nb${isMoreActive ? ' active' : ''}`} onClick={() => setMoreOpen(true)}>
+          <Icon name="dots" size={20} />
+          Outros
+        </div>
       </nav>
+
+      {moreOpen && (
+        <>
+          <div className="drawer-overlay" onClick={() => setMoreOpen(false)} />
+          <div className="drawer">
+            <div className="drawer-head">
+              <div className="drawer-title">Outros</div>
+              <button className="iconbtn" onClick={() => setMoreOpen(false)}>
+                <Icon name="x" size={18} />
+              </button>
+            </div>
+            <nav>
+              {moreNavItems.map((item) => (
+                <div
+                  key={item.path}
+                  className={`navitem${isActive(item.path, pathname) ? ' active' : ''}`}
+                  onClick={() => goFromDrawer(item.path)}
+                >
+                  <Icon name={item.icon} size={18} />
+                  {item.label}
+                </div>
+              ))}
+            </nav>
+            <div className="drawer-foot">
+              <div
+                className="navitem"
+                style={{ color: 'var(--text-faint)' }}
+                onClick={() => { setMoreOpen(false); handleLogout(); }}
+              >
+                <Icon name="logout" size={18} />
+                Sair
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -5,12 +5,15 @@ import { useAppData } from '@/context/AppDataContext';
 import { calcBordero } from '@/lib/calc';
 import { fmt, fmtDate, mesLabel, parseDateLocal } from '@/lib/format';
 
+type StatusFilter = 'todos' | 'receber' | 'recebido';
+
 export function Relatorio() {
   const { eventos, musicos } = useAppData();
   const navigate = useNavigate();
   const [musicoId, setMusicoId] = useState(musicos[0]?.id ?? '');
   const [ano, setAno] = useState('all');
   const [mes, setMes] = useState('all');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos');
 
   const anos = useMemo(() => {
     const s = new Set<string>();
@@ -18,6 +21,14 @@ export function Relatorio() {
     return Array.from(s).sort();
   }, [eventos]);
 
+  function matchesStatus(status: string): boolean {
+    if (statusFilter === 'receber') return status === 'A receber';
+    if (statusFilter === 'recebido') return status === 'Recebido';
+    return true;
+  }
+
+  // Toda a tela deriva de `rows` (totais, gráfico e lista), então o filtro de
+  // status entra aqui, junto com músico/ano/mês, e o resto acompanha sozinho.
   const rows = useMemo(() => {
     const musico = musicos.find((m) => m.id === musicoId);
     if (!musico) return [];
@@ -26,6 +37,7 @@ export function Relatorio() {
         const d = parseDateLocal(ev.date);
         if (ano !== 'all' && String(d.getFullYear()) !== ano) return false;
         if (mes !== 'all' && String(d.getMonth() + 1).padStart(2, '0') !== mes) return false;
+        if (!matchesStatus(ev.status)) return false;
         return ev.scheduledMusicians.some((s) => s.musicianId === musicoId);
       })
       .map((ev) => {
@@ -37,7 +49,8 @@ export function Relatorio() {
         return { evento: ev, bruto, descontos, liquido, status: schedule.paymentStatus };
       })
       .sort((a, b) => b.evento.date.localeCompare(a.evento.date));
-  }, [eventos, musicos, musicoId, ano, mes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventos, musicos, musicoId, ano, mes, statusFilter]);
 
   const totals = rows.reduce(
     (acc, r) => ({ bruto: acc.bruto + r.bruto, descontos: acc.descontos + r.descontos, liquido: acc.liquido + r.liquido }),
@@ -60,27 +73,47 @@ export function Relatorio() {
 
   return (
     <div>
-      <div className="row gap8 mb16" style={{ flexWrap: 'wrap' }}>
-        <select value={musicoId} onChange={(e) => setMusicoId(e.target.value)} style={selStyle}>
+      <div className="rel-filters mb16">
+        <select value={musicoId} onChange={(e) => setMusicoId(e.target.value)} className="rel-filter">
           {musicos.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
         </select>
-        <select value={ano} onChange={(e) => setAno(e.target.value)} style={selStyle}>
+        <select value={ano} onChange={(e) => setAno(e.target.value)} className="rel-filter">
           <option value="all">Todos os anos</option>
           {anos.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
-        <select value={mes} onChange={(e) => setMes(e.target.value)} style={selStyle}>
+        <select value={mes} onChange={(e) => setMes(e.target.value)} className="rel-filter">
           <option value="all">Todos os meses</option>
           {Array.from({ length: 12 }, (_, i) => <option key={i} value={String(i + 1).padStart(2, '0')}>{mesLabel(i)}</option>)}
         </select>
-        <div style={{ flex: 1 }} />
-        <button className="btn btn-sm" onClick={handleExport}><Icon name="download" size={14} />Exportar</button>
+        <button className="btn btn-sm rel-export" onClick={handleExport}>
+          <Icon name="download" size={14} />
+          <span className="rel-export-label">Exportar</span>
+        </button>
       </div>
 
-      <div className="metrics">
-        <div className="metric"><div className="metric-lab">Shows realizados</div><div className="metric-val">{rows.length}</div></div>
-        <div className="metric"><div className="metric-lab">Cachê bruto</div><div className="metric-val">{fmt(totals.bruto)}</div></div>
-        <div className="metric"><div className="metric-lab">Descontos</div><div className="metric-val neg">{fmt(totals.descontos)}</div></div>
-        <div className="metric"><div className="metric-lab">Líquido</div><div className="metric-val pos">{fmt(totals.liquido)}</div></div>
+      <div className="row gap6 mb16" style={{ flexWrap: 'wrap' }}>
+        <button className={`ag-filter${statusFilter === 'todos' ? ' on' : ''}`} onClick={() => setStatusFilter('todos')}>Todos</button>
+        <button className={`ag-filter${statusFilter === 'receber' ? ' on' : ''}`} onClick={() => setStatusFilter('receber')}>A receber</button>
+        <button className={`ag-filter${statusFilter === 'recebido' ? ' on' : ''}`} onClick={() => setStatusFilter('recebido')}>Recebido</button>
+      </div>
+
+      <div className="card mb18">
+        <div className="brow">
+          <span className="metric-lab" style={{ marginBottom: 0 }}><Icon name="calendar" size={14} />Shows realizados</span>
+          <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>{rows.length}</span>
+        </div>
+        <div className="brow">
+          <span className="metric-lab" style={{ marginBottom: 0 }}><Icon name="cash" size={14} />Cachê bruto</span>
+          <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text)' }}>{fmt(totals.bruto)}</span>
+        </div>
+        <div className="brow">
+          <span className="metric-lab" style={{ marginBottom: 0 }}><Icon name="out" size={14} />Descontos</span>
+          <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--danger)' }}>{fmt(totals.descontos)}</span>
+        </div>
+        <div className="brow">
+          <span className="metric-lab" style={{ marginBottom: 0 }}><Icon name="in" size={14} />Líquido</span>
+          <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--success)' }}>{fmt(totals.liquido)}</span>
+        </div>
       </div>
 
       <div className="chart-wrap mb18">
@@ -122,7 +155,3 @@ export function Relatorio() {
     </div>
   );
 }
-
-const selStyle: React.CSSProperties = {
-  height: 34, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 9, padding: '0 10px', color: 'var(--text)', fontSize: 12,
-};
