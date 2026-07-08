@@ -22,6 +22,16 @@ const BOTTOM_NAV_ITEMS = [
   { path: '/config', icon: 'settings', label: 'Config' },
 ];
 
+// Papel "View" (músico do elenco com acesso restrito): só enxerga a própria
+// agenda. Config continua sempre visível pra qualquer papel (renderizado à
+// parte no sidebar-foot / incluído aqui só para o bottomnav do mobile).
+const VIEW_NAV_ITEMS = [{ path: '/agenda', icon: 'calendar', label: 'Minha Agenda' }];
+
+const VIEW_BOTTOM_NAV_ITEMS = [
+  { path: '/agenda', icon: 'calendar', label: 'Minha Agenda' },
+  { path: '/config', icon: 'settings', label: 'Config' },
+];
+
 const PANE_TITLES: Record<string, string> = {
   '/painel': 'Painel',
   '/eventos': 'Eventos',
@@ -31,6 +41,7 @@ const PANE_TITLES: Record<string, string> = {
   '/contratos/novo': 'Gerar Contrato',
   '/relatorio': 'Relatório',
   '/config': 'Configurações',
+  '/agenda': 'Minha Agenda',
 };
 
 function isActive(path: string, pathname: string): boolean {
@@ -53,6 +64,9 @@ export function AppShell() {
   const { loadingData } = useAppData();
   const [dropOpen, setDropOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const isAdmin = group?.role === 'Admin';
+  const navItems = isAdmin ? NAV_ITEMS : VIEW_NAV_ITEMS;
+  const bottomNavItems = isAdmin ? BOTTOM_NAV_ITEMS : VIEW_BOTTOM_NAV_ITEMS;
 
   async function handleLogout() {
     await logout();
@@ -78,14 +92,16 @@ export function AppShell() {
               <div className="brandbox" style={{ width: 22, height: 22, borderRadius: 7, fontSize: 10 }}>{userInitials}</div>
               {group?.name}
             </div>
-            <div className="dropitem" style={{ color: 'var(--brand-ink)' }} onClick={() => navigate('/onboarding')}>
-              <Icon name="plus" size={14} />
-              Novo grupo
-            </div>
+            {isAdmin && (
+              <div className="dropitem" style={{ color: 'var(--brand-ink)' }} onClick={() => navigate('/onboarding')}>
+                <Icon name="plus" size={14} />
+                Novo grupo
+              </div>
+            )}
           </div>
         )}
         <nav>
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <div
               key={item.path}
               className={`navitem${isActive(item.path, pathname) ? ' active' : ''}`}
@@ -165,7 +181,7 @@ export function AppShell() {
       </div>
 
       <nav className="bottomnav">
-        {BOTTOM_NAV_ITEMS.map((item) => (
+        {bottomNavItems.map((item) => (
           <div
             key={item.path}
             className={`nb${isActive(item.path, pathname) ? ' active' : ''}`}

@@ -6,6 +6,7 @@ interface GroupInfo {
   id: string;
   name: string;
   brand: string;
+  role: string;
 }
 
 interface AuthResult {
@@ -23,7 +24,9 @@ interface AuthContextValue {
   signUp: (email: string, password: string) => Promise<AuthResult>;
   logout: () => Promise<void>;
   createGroup: (name: string, brand: string) => Promise<AuthResult>;
+  joinGroup: (name: string, password: string) => Promise<AuthResult>;
   updateGroup: (name: string, brand: string) => Promise<AuthResult>;
+  setGroupPassword: (password: string) => Promise<AuthResult>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -42,13 +45,13 @@ function computeInitials(name: string): string {
 async function fetchGroupForUser(userId: string): Promise<GroupInfo | null> {
   const { data, error } = await supabase
     .from('group_members')
-    .select('group:groups(id, name, brand)')
+    .select('role, group:groups(id, name, brand)')
     .eq('user_id', userId)
     .limit(1)
     .maybeSingle();
   if (error || !data?.group) return null;
   const g = data.group as unknown as { id: string; name: string; brand: string };
-  return { id: g.id, name: g.name, brand: g.brand };
+  return { id: g.id, name: g.name, brand: g.brand, role: data.role };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -110,21 +113,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const currentSession = sessionData.session;
     if (!currentSession) return { error: 'Você precisa estar logado para criar um grupo.' };
 
-    // Gera o id no cliente e insere sem `.select()`: o usuário ainda não é
-    // group_member no momento do insert, então um `RETURNING` esbarraria na
-    // policy de SELECT (que exige ser membro) e o Postgres rejeitaria a
-    // linha inteira com "violates row-level security policy".
-    const newGroupId = crypto.randomUUID();
-    const { error: groupError } = await supabase.from('groups').insert({ id: newGroupId, name, brand });
-    if (groupError) return { error: groupError.message };
-
-    const { error: memberError } = await supabase
-      .from('group_members')
-      .insert({ group_id: newGroupId, user_id: currentSession.user.id, role: 'Admin' });
-    if (memberError) return { error: memberError.message };
+    // create_group (security definer) cria o grupo e insere o próprio
+    // usuário como Admin numa única função no banco — não existe mais
+    // insert direto do cliente em group_members (a policy que permitia
+    // isso foi removida: dava pra qualquer usuário se auto-inserir como
+    // Admin de qualquer grupo, só sabendo o UUID, sem senha nenhuma).
+    const { data, error } = await supabase.rpc('create_group', { p_name: name, p_brand: brand });
+    if (error) return { error: error.message };
+    const g = (data as { id: string; name: string; brand: string }[] | null)?.[0];
+    if (!g) return { error: 'Não foi possível criar o grupo.' };
 
     setSession(currentSession);
-    setGroup({ id: newGroupId, name, brand });
+    setGroup({ id: g.id, name: g.name, brand: g.brand, role: 'Admin' });
+    return { error: null };
+  }
+
+  // Entra em um grupo já existente por nome + senha (definidos por um Admin
+  // do grupo em Config). A verificação da senha acontece inteiramente no
+  // banco (função `join_group`, security definer) — a senha nunca é lida
+  // ou comparada no cliente.
+  async function joinGroup(name: string, password: string): Promise<AuthResult> {
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) return { error: 'Você precisa estar logado para entrar em um grupo.' };
+
+    const { data, error } = await supabase.rpc('join_group', { p_name: name, p_password: password });
+    if (error) return { error: error.message };
+    const g = (data as { id: string; name: string; brand: string }[] | null)?.[0];
+    if (!g) return { error: 'Grupo não encontrado.' };
+
+    setSession(sessionData.session);
+    setGroup({ id: g.id, name: g.name, brand: g.brand, role: 'View' });
     return { error: null };
   }
 
@@ -133,6 +151,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.from('groups').update({ name, brand }).eq('id', group.id);
     if (error) return { error: error.message };
     setGroup({ ...group, name, brand });
+    return { error: null };
+  }
+
+  async function setGroupPassword(password: string): Promise<AuthResult> {
+    if (!group) return { error: 'Nenhum grupo ativo.' };
+    const { error } = await supabase.rpc('set_group_password', { p_group_id: group.id, p_password: password });
+    if (error) return { error: error.message };
     return { error: null };
   }
 
@@ -150,7 +175,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signUp,
         logout,
         createGroup,
+        joinGroup,
         updateGroup,
+        setGroupPassword,
       }}
     >
       {children}

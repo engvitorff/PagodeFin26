@@ -86,7 +86,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    if (!group) {
+    // Usuários "View" (acesso restrito à própria agenda) nunca leem essas
+    // tabelas diretamente — a RLS já bloqueia no banco, então nem tenta
+    // buscar aqui (evita requisições que sempre voltam vazias).
+    if (!group || group.role !== 'Admin') {
       setMusicos([]);
       setEventos([]);
       setTransacoes([]);

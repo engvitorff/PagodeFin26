@@ -61,7 +61,7 @@ export function Login() {
         </form>
         <p style={{ textAlign: 'center', marginTop: 20, fontSize: 13, color: 'var(--text-faint)' }}>
           Não tem grupo?{' '}
-          <span className="link-brand" onClick={() => navigate('/onboarding')}>Criar grupo</span>
+          <span className="link-brand" onClick={() => navigate('/onboarding')}>Criar ou entrar em um grupo</span>
         </p>
       </div>
     </div>

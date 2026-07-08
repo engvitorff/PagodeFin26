@@ -4,6 +4,7 @@ import { AuthProvider } from '@/context/AuthContext';
 import { ThemeProvider } from '@/context/ThemeContext';
 import { AppDataProvider } from '@/context/AppDataContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { AdminOnlyRoute } from '@/components/AdminOnlyRoute';
 import { AppShell } from '@/layouts/AppShell';
 import { Login } from '@/pages/Login';
 import { Onboarding } from '@/pages/Onboarding';
@@ -16,6 +17,7 @@ import { Contratos } from '@/pages/Contratos';
 import { GerarContrato } from '@/pages/GerarContrato';
 import { Relatorio } from '@/pages/Relatorio';
 import { Config } from '@/pages/Config';
+import { MinhaAgenda } from '@/pages/MinhaAgenda';
 
 export default function App() {
   return (
@@ -30,14 +32,17 @@ export default function App() {
 
               <Route element={<ProtectedRoute />}>
                 <Route element={<AppShell />}>
-                  <Route path="/painel" element={<Painel />} />
-                  <Route path="/eventos" element={<Eventos />} />
-                  <Route path="/eventos/:id" element={<EventoDetalhe />} />
-                  <Route path="/caixa" element={<Caixa />} />
-                  <Route path="/musicos" element={<Musicos />} />
-                  <Route path="/contratos" element={<Contratos />} />
-                  <Route path="/contratos/novo" element={<GerarContrato />} />
-                  <Route path="/relatorio" element={<Relatorio />} />
+                  <Route element={<AdminOnlyRoute />}>
+                    <Route path="/painel" element={<Painel />} />
+                    <Route path="/eventos" element={<Eventos />} />
+                    <Route path="/eventos/:id" element={<EventoDetalhe />} />
+                    <Route path="/caixa" element={<Caixa />} />
+                    <Route path="/musicos" element={<Musicos />} />
+                    <Route path="/contratos" element={<Contratos />} />
+                    <Route path="/contratos/novo" element={<GerarContrato />} />
+                    <Route path="/relatorio" element={<Relatorio />} />
+                  </Route>
+                  <Route path="/agenda" element={<MinhaAgenda />} />
                   <Route path="/config" element={<Config />} />
                 </Route>
               </Route>

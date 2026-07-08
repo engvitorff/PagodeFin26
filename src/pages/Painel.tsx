@@ -60,27 +60,25 @@ export function Painel() {
     { label: 'Faturamento total', value: faturamentoTotal, icon: 'chart' },
   ];
 
-  // Receita mensal - 6 meses terminando no mes selecionado. Se so o ano estiver definido
-  // (mes em "Todos"), ancora em dezembro daquele ano (mostra o 2o semestre). Sem nenhum
-  // filtro, ancora no mes atual real.
+  // Receita mensal - os 12 meses do ano selecionado (ou do ano atual, se "Todos os anos"
+  // estiver escolhido). O filtro de mes nao afeta essa janela: ele so recorta agenda/metricas.
+  // Cada mes mostra faturado (todos os shows) vs realizado (so os ja marcados "Recebido"),
+  // por isso essa comparacao ignora o statusFilter da pagina (senao as duas barras colidiriam).
   const monthlyRevenue = useMemo(() => {
     const anchorY = year !== 'all' ? year : now.getFullYear();
-    const anchorM = hasSpecificMonth ? (month as number) : (year !== 'all' ? 11 : now.getMonth());
-    const months: { label: string; total: number }[] = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(anchorY, anchorM - i, 1);
-      const total = eventos
-        .filter((e) => {
-          const ed = parseDateLocal(e.date);
-          return ed.getFullYear() === d.getFullYear() && ed.getMonth() === d.getMonth() && matchesStatus(e.status);
-        })
-        .reduce((s, e) => s + e.totalValueCents, 0);
-      months.push({ label: mesLabel(d.getMonth()), total });
+    const months: { label: string; total: number; recebido: number }[] = [];
+    for (let m = 0; m <= 11; m++) {
+      const monthEventos = eventos.filter((e) => {
+        const ed = parseDateLocal(e.date);
+        return ed.getFullYear() === anchorY && ed.getMonth() === m;
+      });
+      const total = monthEventos.reduce((s, e) => s + e.totalValueCents, 0);
+      const recebido = monthEventos.filter((e) => e.status === 'Recebido').reduce((s, e) => s + e.totalValueCents, 0);
+      months.push({ label: mesLabel(m), total, recebido });
     }
     return months;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [eventos, year, month, statusFilter]);
-  const maxRevenue = Math.max(1, ...monthlyRevenue.map((m) => m.total));
+  }, [eventos, year]);
+  const maxRevenue = Math.max(1, ...monthlyRevenue.flatMap((m) => [m.total, m.recebido]));
 
   // Divisão de custos (pizza) -- agregada so sobre os eventos dentro do filtro
   const costSplit = useMemo(() => {
@@ -173,20 +171,35 @@ export function Painel() {
 
       <div className="grid2" style={{ gap: 14, marginBottom: 22 }}>
         <div className="chart-wrap">
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 14 }}>Receita mensal</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>Receita mensal</div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-faint)' }}>
+                <span style={{ width: 7, height: 7, borderRadius: 2, background: 'var(--brand)' }} />Faturado
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-faint)' }}>
+                <span style={{ width: 7, height: 7, borderRadius: 2, background: 'var(--success)' }} />Realizado
+              </div>
+            </div>
+          </div>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 80 }} onClick={() => setActiveBar(null)}>
             {monthlyRevenue.map((m, i) => (
               <div
                 key={i}
-                style={{ flex: 1, position: 'relative', cursor: 'pointer' }}
+                style={{ flex: 1, position: 'relative', cursor: 'pointer', display: 'flex', alignItems: 'flex-end', gap: 2 }}
                 onMouseEnter={() => setActiveBar(i)}
                 onMouseLeave={() => setActiveBar(null)}
                 onClick={(e) => { e.stopPropagation(); setActiveBar((cur) => (cur === i ? null : i)); }}
               >
-                <div className="chart-bar" style={{ height: `${Math.max(4, (m.total / maxRevenue) * 80)}px` }}>
+                <div className="chart-bar" style={{ flex: 1, height: `${Math.max(4, (m.total / maxRevenue) * 80)}px` }}>
                   <div className="fill" style={{ width: '100%', background: m.total > 0 ? 'var(--brand)' : 'var(--surface-3)' }} />
                 </div>
-                {activeBar === i && <div className="chart-tip">{fmt(m.total)}</div>}
+                <div className="chart-bar" style={{ flex: 1, height: `${Math.max(4, (m.recebido / maxRevenue) * 80)}px` }}>
+                  <div className="fill" style={{ width: '100%', background: m.recebido > 0 ? 'var(--success)' : 'var(--surface-3)' }} />
+                </div>
+                {activeBar === i && (
+                  <div className="chart-tip">Faturado {fmt(m.total)} · Realizado {fmt(m.recebido)}</div>
+                )}
               </div>
             ))}
           </div>

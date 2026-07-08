@@ -3,16 +3,34 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { BRAND_PRESETS } from '@/lib/calc';
 
+type Mode = 'create' | 'join';
+
 export function Onboarding() {
   const navigate = useNavigate();
-  const { isAuthenticated, signUp, createGroup } = useAuth();
+  const { isAuthenticated, signUp, createGroup, joinGroup } = useAuth();
+  const [mode, setMode] = useState<Mode>('create');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [brand, setBrand] = useState(BRAND_PRESETS[0]);
+  const [groupPassword, setGroupPasswordInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  async function ensurePersonalAccount(): Promise<boolean> {
+    if (isAuthenticated) return true;
+    const res = await signUp(email, password);
+    if (res.error) {
+      setError(res.error);
+      return false;
+    }
+    if (res.needsEmailConfirmation) {
+      setInfo('Conta criada! Confirme seu e-mail e depois faça login para continuar.');
+      return false;
+    }
+    return true;
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -20,21 +38,32 @@ export function Onboarding() {
     setInfo(null);
     setSubmitting(true);
 
-    if (!isAuthenticated) {
-      const res = await signUp(email, password);
-      if (res.error) {
-        setSubmitting(false);
-        setError(res.error);
-        return;
-      }
-      if (res.needsEmailConfirmation) {
-        setSubmitting(false);
-        setInfo('Conta criada! Confirme seu e-mail e depois faça login para criar o grupo.');
-        return;
-      }
+    if (!(await ensurePersonalAccount())) {
+      setSubmitting(false);
+      return;
     }
 
     const res = await createGroup(name || 'Meu grupo', brand);
+    setSubmitting(false);
+    if (res.error) {
+      setError(res.error);
+      return;
+    }
+    navigate('/painel');
+  }
+
+  async function handleJoin(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setInfo(null);
+    setSubmitting(true);
+
+    if (!(await ensurePersonalAccount())) {
+      setSubmitting(false);
+      return;
+    }
+
+    const res = await joinGroup(name, groupPassword);
     setSubmitting(false);
     if (res.error) {
       setError(res.error);
@@ -47,10 +76,18 @@ export function Onboarding() {
     <div className="authwrap">
       <div className="authcard-wide">
         <div style={{ marginBottom: 20 }}>
-          <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>Criar grupo</div>
-          <div className="faint">Cada grupo tem seu próprio caixa, equipe e marca.</div>
+          <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>{mode === 'create' ? 'Criar grupo' : 'Entrar em um grupo'}</div>
+          <div className="faint">
+            {mode === 'create' ? 'Cada grupo tem seu próprio caixa, equipe e marca.' : 'Peça o nome e a senha do grupo para um Admin dele.'}
+          </div>
         </div>
-        <form className="card card-form" onSubmit={handleCreate}>
+
+        <div className="row gap8 mb18">
+          <button type="button" className={`btn btn-sm${mode === 'create' ? ' btn-brand' : ''}`} onClick={() => { setMode('create'); setError(null); setInfo(null); }}>Criar grupo</button>
+          <button type="button" className={`btn btn-sm${mode === 'join' ? ' btn-brand' : ''}`} onClick={() => { setMode('join'); setError(null); setInfo(null); }}>Entrar em grupo existente</button>
+        </div>
+
+        <form className="card card-form" onSubmit={mode === 'create' ? handleCreate : handleJoin}>
           {error && (
             <div className="mb14" style={{ background: 'var(--danger-bg)', color: 'var(--danger)', borderRadius: 10, padding: '10px 13px', fontSize: 13 }}>
               {error}
@@ -65,30 +102,45 @@ export function Onboarding() {
           {!isAuthenticated && (
             <>
               <div className="field"><label>Seu e-mail</label><input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="seu@email.com" /></div>
-              <div className="field"><label>Senha</label><input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" /></div>
+              <div className="field"><label>Senha da sua conta</label><input type="password" required minLength={6} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" /></div>
             </>
           )}
 
-          <div className="field">
-            <label>Nome do grupo</label>
-            <input placeholder="Ex.: Grupo 6 Tabom" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="field">
-            <label>Cor da marca</label>
-            <div className="swatches" style={{ marginTop: 4 }}>
-              {BRAND_PRESETS.map((c) => (
-                <div
-                  key={c}
-                  className={`swatch${brand === c ? ' sel' : ''}`}
-                  style={{ background: c }}
-                  onClick={() => setBrand(c)}
-                />
-              ))}
-            </div>
-          </div>
+          {mode === 'create' ? (
+            <>
+              <div className="field">
+                <label>Nome do grupo</label>
+                <input placeholder="Ex.: Grupo 6 Tabom" value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+              <div className="field">
+                <label>Cor da marca</label>
+                <div className="swatches" style={{ marginTop: 4 }}>
+                  {BRAND_PRESETS.map((c) => (
+                    <div
+                      key={c}
+                      className={`swatch${brand === c ? ' sel' : ''}`}
+                      style={{ background: c }}
+                      onClick={() => setBrand(c)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="field">
+                <label>Nome do grupo</label>
+                <input required placeholder="Ex.: Grupo 6 Tabom" value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+              <div className="field">
+                <label>Senha do grupo</label>
+                <input type="password" required minLength={4} placeholder="••••••••" value={groupPassword} onChange={(e) => setGroupPasswordInput(e.target.value)} />
+              </div>
+            </>
+          )}
 
           <button type="submit" className="btn btn-brand btn-full" disabled={submitting}>
-            {submitting ? 'Criando...' : 'Criar grupo e entrar'}
+            {submitting ? 'Enviando...' : mode === 'create' ? 'Criar grupo e entrar' : 'Entrar no grupo'}
           </button>
           <p style={{ textAlign: 'center', marginTop: 14, fontSize: 13 }}>
             <span className="link-brand" onClick={() => navigate('/login')}>← Voltar ao login</span>
