@@ -56,7 +56,7 @@ export function calcBordero(ev: Evento, musicos: Musico[]): Bordero {
   return { faturamento: ev.totalValueCents, custosFixos, freelancersCents, caixaBanda, cotaSocio, numSocios, lucro, operacional, customTotal };
 }
 
-export const BRAND_PRESETS = ['#FF169B', '#7C5CFF', '#16C784', '#F5A524', '#2E8BFF', '#FF5C5C', '#0EA5E9', '#E11D8F'];
+export const BRAND_PRESETS = ['#FF169B', '#7C5CFF', '#16C784', '#F5A524', '#2E8BFF', '#FF5C5C', '#0EA5E9', '#DC2626'];
 
 export const GANTT_COLORS = ['#FF169B', '#7C5CFF', '#16C784', '#F5A524', '#2E8BFF'];
 

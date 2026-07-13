@@ -110,7 +110,7 @@ export function Onboarding() {
             <>
               <div className="field">
                 <label>Nome do grupo</label>
-                <input placeholder="Ex.: Grupo 6 Tabom" value={name} onChange={(e) => setName(e.target.value)} />
+                <input placeholder="Nome do seu grupo/banda" value={name} onChange={(e) => setName(e.target.value)} />
               </div>
               <div className="field">
                 <label>Cor da marca</label>
@@ -130,7 +130,7 @@ export function Onboarding() {
             <>
               <div className="field">
                 <label>Nome do grupo</label>
-                <input required placeholder="Ex.: Grupo 6 Tabom" value={name} onChange={(e) => setName(e.target.value)} />
+                <input required placeholder="Nome do seu grupo/banda" value={name} onChange={(e) => setName(e.target.value)} />
               </div>
               <div className="field">
                 <label>Senha do grupo</label>
