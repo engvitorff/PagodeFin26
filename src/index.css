@@ -2,9 +2,15 @@
 
 :root { color-scheme: dark; }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; background: #0a0a0b; color: #fafafa; min-height: 100vh; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; background: #0a0a0b; color: #fafafa; min-height: 100vh;
+  /* Evita que toques em ícones/labels clicáveis (nav, botões, cards) virem
+     seleção de texto no mobile e abram o menu nativo "Copiar/Pesquisar". */
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+}
 button, input, select, textarea { font-family: inherit; }
 input:focus, select:focus, textarea:focus { outline: none; }
+input, textarea, [contenteditable="true"] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 a { color: inherit; text-decoration: none; }
 ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 4px; }
 
