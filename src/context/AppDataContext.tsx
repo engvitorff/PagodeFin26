@@ -35,6 +35,7 @@ interface AppDataContextValue {
 
   addTransacao: (t: Omit<Transacao, 'id'>) => Promise<void>;
   deleteTransacao: (id: string) => Promise<void>;
+  importTransacoes: (items: Omit<Transacao, 'id'>[]) => Promise<{ inserted: number; error: string | null }>;
 
   addContrato: (c: Omit<Contrato, 'id' | 'sequenceNumber'>) => Promise<Contrato | null>;
   setClausulas: (c: Clausula[]) => Promise<void>;
@@ -375,6 +376,24 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setTransacoes((prev) => prev.filter((x) => x.id !== id));
   };
 
+  // Import de extrato (CSV): insere tudo em uma única chamada (em vez de
+  // repetir addTransacao por linha) — o volume de linhas de um extrato
+  // bancário torna N inserts individuais lento e desnecessário.
+  const importTransacoes: AppDataContextValue['importTransacoes'] = async (items) => {
+    if (!group) return { inserted: 0, error: 'Nenhum grupo ativo.' };
+    if (items.length === 0) return { inserted: 0, error: null };
+
+    const { data, error } = await supabase
+      .from('transacoes')
+      .insert(items.map((t) => ({ group_id: group.id, description: t.description, amount_cents: t.amountCents, type: t.type, category: t.category, date: t.date })))
+      .select();
+    if (reportError(error) || !data) return { inserted: 0, error: error?.message ?? 'Falha ao importar.' };
+
+    const mapped: Transacao[] = data.map((r: any) => ({ id: r.id, description: r.description, amountCents: r.amount_cents, type: r.type, category: r.category, date: r.date }));
+    setTransacoes((prev) => [...mapped, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
+    return { inserted: mapped.length, error: null };
+  };
+
   const addContrato: AppDataContextValue['addContrato'] = async (c) => {
     if (!group) return null;
     const nextSeq = contratos.reduce((max, x) => Math.max(max, x.sequenceNumber), 0) + 1;
@@ -421,6 +440,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         removeCustomExpense,
         addTransacao,
         deleteTransacao,
+        importTransacoes,
         addContrato,
         setClausulas,
       }}
