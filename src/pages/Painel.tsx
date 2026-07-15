@@ -12,8 +12,11 @@ export function Painel() {
   const navigate = useNavigate();
 
   const now = new Date();
-  const [year, setYear] = useState<number | 'all'>('all');
-  const [month, setMonth] = useState<number | 'all'>('all');
+  // Abre no mês atual por padrão (calendário + Gantt do dia visíveis de
+  // cara); "Todos os anos/meses" continua disponível nos selects pra quem
+  // quiser a visão all-time dos totais/gráficos.
+  const [year, setYear] = useState<number | 'all'>(now.getFullYear());
+  const [month, setMonth] = useState<number | 'all'>(now.getMonth());
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('todos');
   const [ganttDate, setGanttDate] = useState<string | null>(null);
   const [activeBar, setActiveBar] = useState<number | null>(null);
