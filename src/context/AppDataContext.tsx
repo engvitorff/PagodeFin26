@@ -249,10 +249,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   };
 
   /**
-   * Alterna o status do evento (A receber <-> Recebido). Ao marcar como Recebido, deposita
-   * automaticamente a fatia calculada "caixa da banda" (calcBordero) em uma transação IN
-   * vinculada ao evento; ao desmarcar, remove essa transação (reconciliação idempotente:
-   * sempre apaga e recria, refletindo os custos/escala mais recentes do evento).
+   * Alterna o status do evento (A receber <-> Recebido). Ao marcar como Recebido, lança o
+   * fluxo de caixa BRUTO do show (calcBordero) como transações vinculadas ao evento: o cachê
+   * total como entrada, e as pernas de custo já conhecidas — despesas (operacional + custom) e
+   * cotas dos sócios — como saídas. Os freelancers/equipe NÃO entram aqui: viram saída só
+   * quando pagos de fato ("Pagar equipe"), refletindo o caixa real. Como
+   *   cachê = despesas + cotas sócios + freelancers + caixa da banda,
+   * o saldo desses lançamentos = freelancers a pagar + caixa da banda; após pagar a equipe, o
+   * saldo do show fecha exatamente na fatia da banda. Ao desmarcar, remove todos esses
+   * lançamentos (reconciliação idempotente: sempre apaga e recria, refletindo os custos/escala
+   * mais recentes do evento). O "Pagamento equipe" não é vinculado ao evento de propósito, pra
+   * que desmarcar o Recebido não apague um desembolso que já aconteceu de verdade.
    */
   const setEventoStatus: AppDataContextValue['setEventoStatus'] = async (id, status) => {
     const ev = eventos.find((e) => e.id === id);
@@ -267,15 +274,23 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setTransacoes((prev) => prev.filter((t) => t.eventoId !== id));
 
     if (status === 'Recebido') {
-      const amount = Math.max(0, calcBordero(ev, musicos).caixaBanda);
-      if (amount > 0) {
-        const { data: tx, error: txError } = await supabase
-          .from('transacoes')
-          .insert({ group_id: group.id, description: `Caixa da banda - ${ev.contractorName}`, amount_cents: amount, type: 'IN', category: 'Receita de Show', date: ev.date, evento_id: id })
-          .select()
-          .single();
-        if (!reportError(txError) && tx) {
-          setTransacoes((prev) => [{ id: tx.id, description: tx.description, amountCents: tx.amount_cents, type: tx.type, category: tx.category, date: tx.date, eventoId: tx.evento_id ?? undefined }, ...prev]);
+      const b = calcBordero(ev, musicos);
+      const despesas = b.operacional + b.customTotal;
+      const sociosTotal = Math.max(0, b.cotaSocio) * b.numSocios;
+
+      const rows = [
+        { description: `Cachê - ${ev.contractorName}`, amount_cents: ev.totalValueCents, type: 'IN', category: 'Receita de Show' },
+        { description: `Despesas - ${ev.contractorName}`, amount_cents: despesas, type: 'OUT', category: 'Despesas Operacionais' },
+        { description: `Cotas dos sócios - ${ev.contractorName}`, amount_cents: sociosTotal, type: 'OUT', category: 'Cachê/Pagamento' },
+      ]
+        .filter((r) => r.amount_cents > 0)
+        .map((r) => ({ ...r, group_id: group.id, date: ev.date, evento_id: id }));
+
+      if (rows.length > 0) {
+        const { data: txs, error: txError } = await supabase.from('transacoes').insert(rows).select();
+        if (!reportError(txError) && txs) {
+          const mapped = txs.map((tx) => ({ id: tx.id, description: tx.description, amountCents: tx.amount_cents, type: tx.type, category: tx.category, date: tx.date, eventoId: tx.evento_id ?? undefined }));
+          setTransacoes((prev) => [...mapped, ...prev]);
         }
       }
     }
