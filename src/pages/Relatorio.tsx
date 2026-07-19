@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/ui/Icon';
+import { FilterBar, filterButtonStyle, filterSelectStyle } from '@/components/ui/FilterBar';
 import { useAuth } from '@/context/AuthContext';
 import { useAppData } from '@/context/AppDataContext';
 import { supabase } from '@/lib/supabase';
@@ -164,33 +165,34 @@ export function Relatorio() {
 
   return (
     <div>
-      <div className="rel-filters mb16">
+      {/* Filtros: mesma posição/espaçamento fixo da barra em Painel/Eventos/Caixa.
+          5 campos (músico, ano, mês, status, exportar) — quebra linha em telas
+          estreitas em vez de truncar tudo de forma ilegível. */}
+      <FilterBar wrap>
         {isAdmin ? (
-          <select value={musicoId} onChange={(e) => setMusicoId(e.target.value)} className="rel-filter">
+          <select value={musicoId} onChange={(e) => setMusicoId(e.target.value)} style={filterSelectStyle}>
             {musicos.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
           </select>
         ) : (
-          <div className="rel-filter" style={{ display: 'flex', alignItems: 'center', fontWeight: 600 }}>{viewMusico?.name}</div>
+          <div style={{ ...filterSelectStyle, display: 'flex', alignItems: 'center' }}>{viewMusico?.name}</div>
         )}
-        <select value={ano} onChange={(e) => setAno(e.target.value)} className="rel-filter">
+        <select value={ano} onChange={(e) => setAno(e.target.value)} style={filterSelectStyle}>
           <option value="all">Todos os anos</option>
           {anos.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
-        <select value={mes} onChange={(e) => setMes(e.target.value)} className="rel-filter">
+        <select value={mes} onChange={(e) => setMes(e.target.value)} style={filterSelectStyle}>
           <option value="all">Todos os meses</option>
           {Array.from({ length: 12 }, (_, i) => <option key={i} value={String(i + 1).padStart(2, '0')}>{mesLabel(i)}</option>)}
         </select>
-        <button className="btn btn-sm rel-export" onClick={handleExport}>
-          <Icon name="download" size={14} />
-          <span className="rel-export-label">Exportar</span>
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)} style={filterSelectStyle}>
+          <option value="todos">Todos</option>
+          <option value="receber">A receber</option>
+          <option value="recebido">Recebido</option>
+        </select>
+        <button className="btn btn-sm" style={{ ...filterButtonStyle, width: 34 }} onClick={handleExport} aria-label="Exportar" title="Exportar">
+          <Icon name="download" size={16} />
         </button>
-      </div>
-
-      <div className="row gap6 mb16" style={{ flexWrap: 'wrap' }}>
-        <button className={`ag-filter${statusFilter === 'todos' ? ' on' : ''}`} onClick={() => setStatusFilter('todos')}>Todos</button>
-        <button className={`ag-filter${statusFilter === 'receber' ? ' on' : ''}`} onClick={() => setStatusFilter('receber')}>A receber</button>
-        <button className={`ag-filter${statusFilter === 'recebido' ? ' on' : ''}`} onClick={() => setStatusFilter('recebido')}>Recebido</button>
-      </div>
+      </FilterBar>
 
       <div className="card mb18">
         <div className="brow">

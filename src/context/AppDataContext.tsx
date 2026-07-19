@@ -125,7 +125,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setEventos(eventosRes.data.map(mapEventoRow));
       }
       if (transacoesRes.data) {
-        setTransacoes(transacoesRes.data.map((r: any) => ({ id: r.id, description: r.description, amountCents: r.amount_cents, type: r.type, category: r.category, date: r.date, eventoId: r.evento_id ?? undefined })));
+        setTransacoes(transacoesRes.data.map((r: any) => ({ id: r.id, description: r.description, amountCents: r.amount_cents, type: r.type, category: r.category, date: r.date, eventoId: r.evento_id ?? undefined, lineItems: r.line_items ?? undefined })));
       }
       if (contratosRes.data) {
         setContratos(contratosRes.data.map((r: any) => ({ id: r.id, eventId: r.event_id, sequenceNumber: r.sequence_number, contractorName: r.contractor_name, eventDate: r.event_date, totalValueCents: r.total_value_cents, issuedAt: r.issued_at })));
@@ -334,24 +334,33 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
     const idSet = new Set(scheduleIds);
     let totalPaidCents = 0;
+    const lineItems: { name: string; instrument?: string; cents: number }[] = [];
     for (const s of ev.scheduledMusicians) {
       if (idSet.has(s.id)) {
         const musico = musicos.find((m) => m.id === s.musicianId);
         const base = musico?.role === 'Sócio' ? 0 : s.feeOverrideCents;
-        totalPaidCents += Math.max(0, base - s.otherExpensesCents);
+        const value = Math.max(0, base - s.otherExpensesCents);
+        totalPaidCents += value;
+        if (value > 0) {
+          lineItems.push({ name: musico?.name ?? 'Músico', instrument: musico?.instrument || undefined, cents: value });
+        }
       }
     }
 
     setEventos((prev) => prev.map((e) => (e.id === eventoId ? { ...e, scheduledMusicians: e.scheduledMusicians.map((s) => (idSet.has(s.id) ? { ...s, paymentStatus: 'Pago', paidViaTeam: true } : s)) } : e)));
 
     if (totalPaidCents > 0) {
-      const { data: tx } = await supabase
+      const { data: tx, error: txError } = await supabase
         .from('transacoes')
-        .insert({ group_id: group.id, description: `Pagamento equipe - ${ev.contractorName}`, amount_cents: totalPaidCents, type: 'OUT', category: 'Cachê/Pagamento', date: new Date().toISOString().slice(0, 10) })
+        // NÃO vincular evento_id de propósito: desmarcar "Recebido" apaga
+        // transações por evento_id, e este é um desembolso real que já
+        // aconteceu (não deve sumir). O extrato por músico vai em line_items.
+        .insert({ group_id: group.id, description: `Pagamento equipe - ${ev.contractorName}`, amount_cents: totalPaidCents, type: 'OUT', category: 'Cachê/Pagamento', date: new Date().toISOString().slice(0, 10), line_items: lineItems })
         .select()
         .single();
+      if (reportError(txError)) return;
       if (tx) {
-        setTransacoes((prev) => [{ id: tx.id, description: tx.description, amountCents: tx.amount_cents, type: tx.type, category: tx.category, date: tx.date }, ...prev]);
+        setTransacoes((prev) => [{ id: tx.id, description: tx.description, amountCents: tx.amount_cents, type: tx.type, category: tx.category, date: tx.date, eventoId: tx.evento_id ?? undefined, lineItems: tx.line_items ?? undefined }, ...prev]);
       }
     }
   };

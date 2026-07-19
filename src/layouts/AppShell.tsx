@@ -20,7 +20,12 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/relatorio', icon: 'chart', label: 'Relatório' },
 ];
 
+// Itens de conta/config: ficam no rodapé da sidebar (desktop), no menu da
+// conta (topo direito) e no drawer "Outros" (mobile).
+const USER_ITEM: NavItem = { path: '/usuario', icon: 'usrplus', label: 'Usuário' };
+const BAND_ITEM: NavItem = { path: '/banda', icon: 'music', label: 'Banda' };
 const CONFIG_ITEM: NavItem = { path: '/config', icon: 'settings', label: 'Configurações' };
+const ACCOUNT_ITEMS: NavItem[] = [USER_ITEM, BAND_ITEM, CONFIG_ITEM];
 
 // Papel "View" (músico do elenco com acesso restrito): enxerga a própria
 // agenda e um Relatório (só com os próprios shows/valores — ver
@@ -41,6 +46,8 @@ const PANE_TITLES: Record<string, string> = {
   '/contratos/novo': 'Gerar Contrato',
   '/relatorio': 'Relatório',
   '/config': 'Configurações',
+  '/usuario': 'Usuário',
+  '/banda': 'Banda',
   '/agenda': 'Minha Agenda',
 };
 
@@ -68,7 +75,7 @@ export function AppShell() {
   const isAdmin = group?.role === 'Admin';
   const navItems = isAdmin ? NAV_ITEMS : VIEW_NAV_ITEMS;
   const pinnedNavItems = navItems.filter((item) => item.pinned);
-  const moreNavItems = [...navItems.filter((item) => !item.pinned), CONFIG_ITEM];
+  const moreNavItems = [...navItems.filter((item) => !item.pinned), ...ACCOUNT_ITEMS];
   const isMoreActive = moreNavItems.some((item) => isActive(item.path, pathname));
 
   async function handleLogout() {
@@ -121,10 +128,16 @@ export function AppShell() {
           ))}
         </nav>
         <div className="sidebar-foot">
-          <div className={`navitem${pathname === '/config' ? ' active' : ''}`} onClick={() => navigate('/config')}>
-            <Icon name="settings" size={18} />
-            Configurações
-          </div>
+          {ACCOUNT_ITEMS.map((item) => (
+            <div
+              key={item.path}
+              className={`navitem${pathname === item.path ? ' active' : ''}`}
+              onClick={() => navigate(item.path)}
+            >
+              <Icon name={item.icon} size={18} />
+              {item.label}
+            </div>
+          ))}
           <div
             className="navitem"
             style={{ color: 'var(--text-faint)' }}
@@ -167,10 +180,12 @@ export function AppShell() {
                     </div>
                     <div className="faint" style={{ marginTop: 2, wordBreak: 'break-all' }}>{user?.email}</div>
                   </div>
-                  <div className="dropitem" onClick={() => { setAccountOpen(false); navigate('/config'); }}>
-                    <Icon name="settings" size={14} />
-                    Configurações
-                  </div>
+                  {ACCOUNT_ITEMS.map((item) => (
+                    <div key={item.path} className="dropitem" onClick={() => { setAccountOpen(false); navigate(item.path); }}>
+                      <Icon name={item.icon} size={14} />
+                      {item.label}
+                    </div>
+                  ))}
                   <div className="dropitem" style={{ color: 'var(--danger)' }} onClick={() => { setAccountOpen(false); handleLogout(); }}>
                     <Icon name="logout" size={14} />
                     Sair

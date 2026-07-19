@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/ui/Icon';
 import { Modal } from '@/components/ui/Modal';
 import { MapPicker } from '@/components/ui/MapPicker';
+import { FilterBar, filterButtonStyle, filterSelectStyle } from '@/components/ui/FilterBar';
 import { useAppData } from '@/context/AppDataContext';
 import { fmt, isOverdue, mesLabel, parseCents, parseDateLocal } from '@/lib/format';
 
@@ -35,28 +36,32 @@ export function Eventos() {
 
   return (
     <div>
-      <div className="row between mb16">
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <select value={filterAno} onChange={(e) => setFilterAno(e.target.value)} style={selStyle}>
-            <option value="all">Todos os anos</option>
-            {anos.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
-          <select value={filterMes} onChange={(e) => setFilterMes(e.target.value)} style={selStyle}>
-            <option value="all">Todos os meses</option>
-            {Array.from({ length: 12 }, (_, i) => (
-              <option key={i} value={String(i + 1).padStart(2, '0')}>{mesLabel(i)}</option>
-            ))}
-          </select>
-          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={selStyle}>
-            <option value="all">Todos</option>
-            <option value="A receber">A receber</option>
-            <option value="Recebido">Recebido</option>
-          </select>
-        </div>
-        <button className="btn btn-brand btn-sm" onClick={() => setShowModal(true)}>
-          <Icon name="plus" size={14} />Novo evento
+      <FilterBar>
+        <select value={filterAno} onChange={(e) => setFilterAno(e.target.value)} style={filterSelectStyle}>
+          <option value="all">Todos os anos</option>
+          {anos.map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <select value={filterMes} onChange={(e) => setFilterMes(e.target.value)} style={filterSelectStyle}>
+          <option value="all">Todos os meses</option>
+          {Array.from({ length: 12 }, (_, i) => (
+            <option key={i} value={String(i + 1).padStart(2, '0')}>{mesLabel(i)}</option>
+          ))}
+        </select>
+        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={filterSelectStyle}>
+          <option value="all">Todos</option>
+          <option value="A receber">A receber</option>
+          <option value="Recebido">Recebido</option>
+        </select>
+        <button
+          className="btn btn-brand btn-sm"
+          style={{ ...filterButtonStyle, width: 44 }}
+          onClick={() => setShowModal(true)}
+          aria-label="Novo evento"
+          title="Novo evento"
+        >
+          <Icon name="plus" size={20} />
         </button>
-      </div>
+      </FilterBar>
 
       <div>
         {filtered.length === 0 && <div className="faint">Nenhum evento encontrado.</div>}
@@ -111,10 +116,6 @@ export function Eventos() {
     </div>
   );
 }
-
-const selStyle: React.CSSProperties = {
-  height: 34, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 9, padding: '0 10px', color: 'var(--text)', fontSize: 12,
-};
 
 function NovoEventoModal({ onClose, onSave }: { onClose: () => void; onSave: (payload: Parameters<ReturnType<typeof useAppData>['addEvento']>[0]) => void }) {
   const [contractorName, setContractorName] = useState('');

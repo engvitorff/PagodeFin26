@@ -1,23 +1,48 @@
 import { useMemo, useRef, useState } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { Modal } from '@/components/ui/Modal';
+import { FilterBar, filterButtonStyle, filterSelectStyle } from '@/components/ui/FilterBar';
 import { useAppData } from '@/context/AppDataContext';
 import { TX_CATEGORIES } from '@/data/mocks';
 import { parseDelimitedText, parseFlexibleAmountToCents, parseFlexibleDate } from '@/lib/csvImport';
+import { calcBordero } from '@/lib/calc';
 import { fmt, fmtDate, mesLabel, parseCents, parseDateLocal, todayStr } from '@/lib/format';
-import type { Transacao, TxType } from '@/types';
+import type { Evento, Transacao, TxType } from '@/types';
 
 export function Caixa() {
-  const { transacoes, addTransacao, deleteTransacao, importTransacoes } = useAppData();
+  const { transacoes, eventos, musicos, addTransacao, deleteTransacao, importTransacoes } = useAppData();
   const [filterAno, setFilterAno] = useState('all');
   const [filterMes, setFilterMes] = useState('all');
   const [showModal, setShowModal] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [mpBannerOpen, setMpBannerOpen] = useState(true);
+  const [detailTx, setDetailTx] = useState<Transacao | null>(null);
 
   const saldoTotal = transacoes.reduce((s, t) => s + (t.type === 'IN' ? t.amountCents : -t.amountCents), 0);
   const entradasTotal = transacoes.filter((t) => t.type === 'IN').reduce((s, t) => s + t.amountCents, 0);
   const saidasTotal = transacoes.filter((t) => t.type === 'OUT').reduce((s, t) => s + t.amountCents, 0);
+
+  function matchesFilter(dateStr: string): boolean {
+    const d = parseDateLocal(dateStr);
+    if (filterAno !== 'all' && String(d.getFullYear()) !== filterAno) return false;
+    if (filterMes !== 'all' && String(d.getMonth() + 1).padStart(2, '0') !== filterMes) return false;
+    return true;
+  }
+
+  // Fundo da banda: a parte que fica pra banda em cada show já recebido
+  // (o `caixaBanda` do borderô — sem o dinheiro que só passa pela conta a
+  // caminho de sócios/freelancers). Segue os mesmos filtros de ano/mês da
+  // lista abaixo — dinheiro que já entrou de fato, restrito ao período.
+  const fundoPorShow = useMemo(
+    () =>
+      eventos
+        .filter((e) => e.status === 'Recebido' && matchesFilter(e.date))
+        .map((e) => ({ id: e.id, nome: e.contractorName, date: e.date, cents: Math.max(0, calcBordero(e, musicos).caixaBanda) }))
+        .sort((a, b) => b.date.localeCompare(a.date)),
+    [eventos, musicos, filterAno, filterMes],
+  );
+  const fundoTotal = fundoPorShow.reduce((s, f) => s + f.cents, 0);
+  const hasAnyRecebido = useMemo(() => eventos.some((e) => e.status === 'Recebido'), [eventos]);
+  const isFiltering = filterAno !== 'all' || filterMes !== 'all';
 
   const anos = useMemo(() => {
     const s = new Set<string>();
@@ -25,17 +50,44 @@ export function Caixa() {
     return Array.from(s).sort();
   }, [transacoes]);
 
-  const filtered = transacoes
-    .filter((t) => {
-      const d = parseDateLocal(t.date);
-      if (filterAno !== 'all' && String(d.getFullYear()) !== filterAno) return false;
-      if (filterMes !== 'all' && String(d.getMonth() + 1).padStart(2, '0') !== filterMes) return false;
-      return true;
-    })
-    .sort((a, b) => b.date.localeCompare(a.date));
+  const filtered = transacoes.filter((t) => matchesFilter(t.date)).sort((a, b) => b.date.localeCompare(a.date));
 
   return (
     <div>
+      {/* Filtro de ano/mês: afeta o Fundo da banda abaixo e a lista de
+          transações, por isso fica fixo no topo (mesma posição/espaçamento
+          da barra de filtros em Painel/Eventos/Relatório). */}
+      <FilterBar>
+        <select value={filterAno} onChange={(e) => setFilterAno(e.target.value)} style={filterSelectStyle}>
+          <option value="all">Todos os anos</option>
+          {anos.map((a) => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <select value={filterMes} onChange={(e) => setFilterMes(e.target.value)} style={filterSelectStyle}>
+          <option value="all">Todos os meses</option>
+          {Array.from({ length: 12 }, (_, i) => (
+            <option key={i} value={String(i + 1).padStart(2, '0')}>{mesLabel(i)}</option>
+          ))}
+        </select>
+        <button
+          className="btn btn-sm"
+          style={{ ...filterButtonStyle, width: 34 }}
+          onClick={() => setShowImport(true)}
+          aria-label="Importar dados"
+          title="Importar dados"
+        >
+          <Icon name="download" size={16} style={{ transform: 'scaleY(-1)' }} />
+        </button>
+        <button
+          className="btn btn-brand btn-sm"
+          style={{ ...filterButtonStyle, width: 44 }}
+          onClick={() => setShowModal(true)}
+          aria-label="Nova transação"
+          title="Nova transação"
+        >
+          <Icon name="plus" size={20} />
+        </button>
+      </FilterBar>
+
       <div className="card mb18" style={{ background: 'linear-gradient(135deg, var(--surface) 0%, var(--surface-2) 100%)' }}>
         <div className="faint mb8">Saldo consolidado</div>
         <div style={{ fontSize: 30, fontWeight: 700, marginBottom: 14 }}>{fmt(saldoTotal)}</div>
@@ -45,45 +97,50 @@ export function Caixa() {
         </div>
       </div>
 
-      {mpBannerOpen && (
-        <div className="card mb18 row between gap12">
-          <div className="row gap12">
-            <div className="thumb"><Icon name="link" size={16} /></div>
+      {hasAnyRecebido && (
+        <div className="card mb18">
+          <div className="row between" style={{ alignItems: 'flex-start' }}>
             <div>
-              <div className="row-name">Vincule sua conta Mercado Pago</div>
-              <div className="row-sub">Importe transações automaticamente.</div>
+              <div className="row gap6 mb8" style={{ alignItems: 'center' }}>
+                <Icon name="cash" size={14} style={{ color: 'var(--brand-ink)' }} />
+                <span className="faint">Fundo da banda{isFiltering ? ' no período' : ''}</span>
+              </div>
+              <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--brand-ink)' }}>{fmt(fundoTotal)}</div>
             </div>
+            <span className="faint" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>{fundoPorShow.length} show(s)</span>
           </div>
-          <div className="row gap8">
-            <button className="btn btn-sm btn-brand" onClick={() => alert('Integração Mercado Pago (mock)')}>Vincular conta</button>
-            <button className="iconbtn" onClick={() => setMpBannerOpen(false)}><Icon name="x" size={14} /></button>
+          <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>
+            A parte que fica pra banda em cada show recebido (sem os repasses de sócios e freelancers).
           </div>
+          {fundoPorShow.length > 0 ? (
+            <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 6 }}>
+              {fundoPorShow.map((f) => (
+                <div key={f.id} className="row between" style={{ padding: '6px 0', fontSize: 13 }}>
+                  <span>{f.nome}</span>
+                  <span style={{ color: 'var(--brand-ink)', fontWeight: 600 }}>{fmt(f.cents)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="faint" style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 10, fontSize: 13 }}>
+              Nenhum show recebido neste período.
+            </div>
+          )}
         </div>
       )}
-
-      <div className="row between mb16" style={{ flexWrap: 'wrap', rowGap: 10 }}>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <select value={filterAno} onChange={(e) => setFilterAno(e.target.value)} style={selStyle}>
-            <option value="all">Todos os anos</option>
-            {anos.map((a) => <option key={a} value={a}>{a}</option>)}
-          </select>
-          <select value={filterMes} onChange={(e) => setFilterMes(e.target.value)} style={selStyle}>
-            <option value="all">Todos os meses</option>
-            {Array.from({ length: 12 }, (_, i) => (
-              <option key={i} value={String(i + 1).padStart(2, '0')}>{mesLabel(i)}</option>
-            ))}
-          </select>
-        </div>
-        <div className="row gap8">
-          <button className="btn btn-sm" onClick={() => setShowImport(true)}><Icon name="download" size={14} style={{ transform: 'scaleY(-1)' }} />Importar dados</button>
-          <button className="btn btn-brand btn-sm" onClick={() => setShowModal(true)}><Icon name="plus" size={14} />Nova transação</button>
-        </div>
-      </div>
 
       <div>
         {filtered.length === 0 && <div className="faint">Nenhuma transação encontrada.</div>}
         {filtered.map((t) => (
-          <div key={t.id} className="tx-card">
+          <div
+            key={t.id}
+            className="tx-card"
+            style={{ cursor: 'pointer' }}
+            role="button"
+            tabIndex={0}
+            onClick={() => setDetailTx(t)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailTx(t); } }}
+          >
             <div className="thumb" style={{ color: t.type === 'IN' ? 'var(--success)' : 'var(--danger)', background: t.type === 'IN' ? 'var(--success-bg)' : 'var(--danger-bg)' }}>
               <Icon name={t.type === 'IN' ? 'in' : 'out'} size={16} />
             </div>
@@ -94,20 +151,97 @@ export function Caixa() {
             <div className={t.type === 'IN' ? 'pos' : 'neg'} style={{ fontSize: 14 }}>
               {t.type === 'IN' ? '+ ' : '- '}{fmt(t.amountCents)}
             </div>
-            <button className="iconbtn tx-del" onClick={() => deleteTransacao(t.id)}><Icon name="trash" size={14} /></button>
+            <button
+              className="iconbtn tx-del"
+              aria-label="Excluir transação"
+              onClick={(e) => { e.stopPropagation(); deleteTransacao(t.id); }}
+            >
+              <Icon name="trash" size={14} />
+            </button>
           </div>
         ))}
       </div>
 
       {showModal && <NovaTransacaoModal onClose={() => setShowModal(false)} onSave={(t) => { addTransacao(t); setShowModal(false); }} />}
       {showImport && <ImportModal existentes={transacoes} onClose={() => setShowImport(false)} onImport={importTransacoes} />}
+      {detailTx && (
+        <TransacaoDetalheModal
+          tx={detailTx}
+          evento={detailTx.eventoId ? eventos.find((e) => e.id === detailTx.eventoId) : undefined}
+          onClose={() => setDetailTx(null)}
+          onDelete={() => { deleteTransacao(detailTx.id); setDetailTx(null); }}
+        />
+      )}
     </div>
   );
 }
 
-const selStyle: React.CSSProperties = {
-  height: 34, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 9, padding: '0 10px', color: 'var(--text)', fontSize: 12,
-};
+function TransacaoDetalheModal({ tx, evento, onClose, onDelete }: {
+  tx: Transacao;
+  evento: Evento | undefined;
+  onClose: () => void;
+  onDelete: () => void;
+}) {
+  const isIn = tx.type === 'IN';
+  return (
+    <Modal title="Detalhes da transação" onClose={onClose}>
+      <div className="row gap12 mb18" style={{ alignItems: 'center' }}>
+        <div className="thumb" style={{ color: isIn ? 'var(--success)' : 'var(--danger)', background: isIn ? 'var(--success-bg)' : 'var(--danger-bg)' }}>
+          <Icon name={isIn ? 'in' : 'out'} size={18} />
+        </div>
+        <div className="grow">
+          <div className="faint" style={{ fontSize: 12 }}>{isIn ? 'Entrada' : 'Saída'}</div>
+          <div className={isIn ? 'pos' : 'neg'} style={{ fontSize: 22, fontWeight: 700 }}>
+            {isIn ? '+ ' : '- '}{fmt(tx.amountCents)}
+          </div>
+        </div>
+      </div>
+
+      <DetailRow label="Descrição" value={tx.description || '—'} />
+      <DetailRow label="Categoria" value={tx.category} />
+      <DetailRow label="Data" value={fmtDate(tx.date)} />
+      {tx.eventoId && (
+        <DetailRow label="Evento vinculado" value={evento ? evento.contractorName : 'Evento removido'} />
+      )}
+
+      {tx.lineItems && tx.lineItems.length > 0 && (
+        <div style={{ padding: '12px 0 4px' }}>
+          <div className="faint" style={{ fontSize: 12, marginBottom: 8 }}>
+            Extrato do pagamento · {tx.lineItems.length} músico(s)
+          </div>
+          <div>
+            {tx.lineItems.map((li, i) => (
+              <div key={i} className="row between" style={{ padding: '8px 0', borderBottom: '1px solid var(--border)', gap: 12 }}>
+                <div className="grow" style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 14 }}>{li.name}</div>
+                  {li.instrument && <div className="faint" style={{ fontSize: 12 }}>{li.instrument}</div>}
+                </div>
+                <div className="neg" style={{ fontSize: 14, whiteSpace: 'nowrap' }}>{fmt(li.cents)}</div>
+              </div>
+            ))}
+            <div className="row between" style={{ padding: '10px 0 2px', gap: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>Total</div>
+              <div className="neg" style={{ fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap' }}>{fmt(tx.amountCents)}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <button className="btn btn-full btn-danger" style={{ marginTop: 6 }} onClick={onDelete}>
+        <Icon name="trash" size={14} />Excluir transação
+      </button>
+    </Modal>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+      <div className="faint" style={{ fontSize: 12, marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 14, wordBreak: 'break-word' }}>{value}</div>
+    </div>
+  );
+}
 
 function NovaTransacaoModal({ onClose, onSave }: { onClose: () => void; onSave: (t: { description: string; amountCents: number; type: TxType; category: string; date: string }) => void }) {
   const [type, setType] = useState<TxType>('IN');

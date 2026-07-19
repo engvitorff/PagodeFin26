@@ -17,6 +17,8 @@ import { Contratos } from '@/pages/Contratos';
 import { GerarContrato } from '@/pages/GerarContrato';
 import { Relatorio } from '@/pages/Relatorio';
 import { Config } from '@/pages/Config';
+import { Usuario } from '@/pages/Usuario';
+import { Banda } from '@/pages/Banda';
 import { MinhaAgenda } from '@/pages/MinhaAgenda';
 
 export default function App() {
@@ -43,6 +45,8 @@ export default function App() {
                   </Route>
                   <Route path="/relatorio" element={<Relatorio />} />
                   <Route path="/agenda" element={<MinhaAgenda />} />
+                  <Route path="/usuario" element={<Usuario />} />
+                  <Route path="/banda" element={<Banda />} />
                   <Route path="/config" element={<Config />} />
                 </Route>
               </Route>

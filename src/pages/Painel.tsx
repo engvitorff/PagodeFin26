@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/ui/Icon';
+import { FilterBar, filterSelectStyle } from '@/components/ui/FilterBar';
 import { useAppData } from '@/context/AppDataContext';
 import { calcBordero, GANTT_COLORS, PIZZA_COLORS } from '@/lib/calc';
 import { DIAS_SEMANA, fmt, fmtDateShort, mesLabel, parseDateLocal, todayStr } from '@/lib/format';
@@ -58,7 +59,6 @@ export function Painel() {
   const faturamentoTotal = scopedEventos.reduce((s, e) => s + e.totalValueCents, 0);
 
   const metrics = [
-    { label: 'Caixa da banda', value: caixaBandaSaldo, icon: 'wallet' },
     { label: 'A receber', value: aReceber, icon: 'clock' },
     { label: 'Faturamento total', value: faturamentoTotal, icon: 'chart' },
   ];
@@ -82,6 +82,27 @@ export function Painel() {
     return months;
   }, [eventos, year]);
   const maxRevenue = Math.max(1, ...monthlyRevenue.flatMap((m) => [m.total, m.recebido]));
+
+  // Fundo da banda: Previsto (caixaBanda de todos os shows do período, recebidos
+  // ou não) x Realizado (só os já recebidos, pelo borderô) x Consolidado (saldo
+  // de fato no Caixa, somando as transações do período). Ignora o statusFilter
+  // da página pelo mesmo motivo da "Receita mensal" acima: senão as colunas
+  // colapsam quando o usuário filtra só "Recebido" ou só "A receber".
+  // Realizado e Consolidado deveriam bater sempre que os repasses (equipe/sócios)
+  // de todo show recebido já tiverem sido lançados no Caixa; se não baterem, é
+  // sinal de um lançamento pendente ou de uma transação avulsa fora do borderô.
+  const fundoBanda = useMemo(() => {
+    const shows = eventos
+      .filter((e) => matchesYearMonth(e.date))
+      .map((e) => ({ id: e.id, nome: e.contractorName, date: e.date, status: e.status, cents: Math.max(0, calcBordero(e, musicos).caixaBanda) }))
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const previsto = shows.reduce((s, x) => s + x.cents, 0);
+    const realizado = shows.filter((x) => x.status === 'Recebido').reduce((s, x) => s + x.cents, 0);
+    return { shows, previsto, realizado, consolidado: caixaBandaSaldo };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventos, musicos, year, month, caixaBandaSaldo]);
+  const fundoRealizadoPct = fundoBanda.previsto > 0 ? Math.min(100, Math.round((fundoBanda.realizado / fundoBanda.previsto) * 100)) : 0;
+  const fundoDiff = fundoBanda.consolidado - fundoBanda.realizado;
 
   // Divisão de custos (pizza) -- agregada so sobre os eventos dentro do filtro
   const costSplit = useMemo(() => {
@@ -163,6 +184,37 @@ export function Painel() {
 
   return (
     <div>
+      {/* Filtros de ano/mês/status: afetam praticamente todos os quadros da página
+          (métricas, fundo da banda, gráficos, agenda), por isso ficam fixos junto
+          do cabeçalho em vez de dentro de uma seção específica. */}
+      <FilterBar>
+        <select
+          value={year}
+          onChange={(e) => { setYear(e.target.value === 'all' ? 'all' : Number(e.target.value)); setGanttDate(null); }}
+          style={filterSelectStyle}
+        >
+          <option value="all">Todos os anos</option>
+          {yearsAvailable.map((y) => <option key={y} value={y}>{y}</option>)}
+        </select>
+        <select
+          value={month}
+          onChange={(e) => { setMonth(e.target.value === 'all' ? 'all' : Number(e.target.value)); setGanttDate(null); }}
+          style={filterSelectStyle}
+        >
+          <option value="all">Todos os meses</option>
+          {Array.from({ length: 12 }, (_, i) => <option key={i} value={i}>{mesLabel(i, true)}</option>)}
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(e) => { setStatusFilter(e.target.value as StatusFilter); setGanttDate(null); }}
+          style={filterSelectStyle}
+        >
+          <option value="todos">Todos</option>
+          <option value="receber">A receber</option>
+          <option value="recebido">Recebido</option>
+        </select>
+      </FilterBar>
+
       <div className="card mb18">
         {metrics.map((m) => (
           <div className="brow" key={m.label}>
@@ -171,6 +223,51 @@ export function Painel() {
           </div>
         ))}
       </div>
+
+      {fundoBanda.shows.length > 0 && (
+        <div className="card mb18">
+          <div className="row gap6 mb8" style={{ alignItems: 'center' }}>
+            <Icon name="cash" size={14} style={{ color: 'var(--brand-ink)' }} />
+            <span className="faint">Fundo da banda · Previsto x Realizado x Consolidado</span>
+          </div>
+          <div className="row gap8" style={{ marginBottom: 10 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="faint" style={{ fontSize: 11, marginBottom: 2 }}>Previsto</div>
+              <div style={{ fontSize: 18, fontWeight: 700 }}>{fmt(fundoBanda.previsto)}</div>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="faint" style={{ fontSize: 11, marginBottom: 2 }}>Realizado</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--success)' }}>{fmt(fundoBanda.realizado)}</div>
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div className="faint" style={{ fontSize: 11, marginBottom: 2 }}>Consolidado</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--brand-ink)' }}>{fmt(fundoBanda.consolidado)}</div>
+            </div>
+          </div>
+          <div style={{ height: 6, borderRadius: 4, background: 'var(--surface-3)', overflow: 'hidden', marginBottom: 8 }}>
+            <div style={{ height: '100%', width: `${fundoRealizadoPct}%`, background: 'var(--success)', transition: 'width .2s' }} />
+          </div>
+          <div className="faint" style={{ fontSize: 12, marginBottom: fundoDiff !== 0 ? 6 : 10 }}>
+            {fundoRealizadoPct}% do fundo previsto pro período já entrou no caixa.
+          </div>
+          {fundoDiff !== 0 && (
+            <div style={{ fontSize: 12, color: 'var(--danger)', marginBottom: 10 }}>
+              Caixa {fundoDiff > 0 ? 'acima' : 'abaixo'} do realizado em {fmt(Math.abs(fundoDiff))} — confira lançamentos avulsos ou repasses pendentes.
+            </div>
+          )}
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 6 }}>
+            {fundoBanda.shows.map((s) => (
+              <div key={s.id} className="row between" style={{ padding: '6px 0', fontSize: 13 }}>
+                <div className="row gap8" style={{ alignItems: 'center' }}>
+                  <span>{s.nome}</span>
+                  <span className={`badge ${s.status === 'Recebido' ? 'badge-ok' : 'badge-warn'}`}>{s.status}</span>
+                </div>
+                <span style={{ fontWeight: 600 }}>{fmt(s.cents)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid2" style={{ gap: 14, marginBottom: 22 }}>
         <div className="chart-wrap">
@@ -260,31 +357,6 @@ export function Painel() {
 
       {!ganttDate ? (
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-            <select
-              value={year}
-              onChange={(e) => setYear(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-              style={{ padding: '5px 12px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)', fontSize: 13, fontWeight: 600, color: 'var(--text)', height: 34 }}
-            >
-              <option value="all">Todos os anos</option>
-              {yearsAvailable.map((y) => <option key={y} value={y}>{y}</option>)}
-            </select>
-            <select
-              value={month}
-              onChange={(e) => setMonth(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-              style={{ padding: '5px 12px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)', fontSize: 13, fontWeight: 600, color: 'var(--text)', height: 34, minWidth: 110 }}
-            >
-              <option value="all">Todos os meses</option>
-              {Array.from({ length: 12 }, (_, i) => <option key={i} value={i}>{mesLabel(i, true)}</option>)}
-            </select>
-            <div style={{ flex: 1, minWidth: 12 }} />
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button className={`ag-filter${statusFilter === 'todos' ? ' on' : ''}`} onClick={() => setStatusFilter('todos')}>Todos</button>
-              <button className={`ag-filter${statusFilter === 'receber' ? ' on' : ''}`} onClick={() => setStatusFilter('receber')}>A receber</button>
-              <button className={`ag-filter${statusFilter === 'recebido' ? ' on' : ''}`} onClick={() => setStatusFilter('recebido')}>Recebido</button>
-            </div>
-          </div>
-
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 15, fontWeight: 600 }}>
               <Icon name="calendar" size={16} style={{ color: 'var(--brand-ink)' }} />

@@ -53,6 +53,14 @@ export interface Evento {
 
 export type TxType = 'IN' | 'OUT';
 
+/** Item do extrato de uma transação agregada (ex.: "Pagamento equipe" — um item por músico). */
+export interface TxLineItem {
+  name: string;
+  instrument?: string;
+  /** Valor líquido pago a este músico, em centavos (já descontado vale/adiantamento). */
+  cents: number;
+}
+
 export interface Transacao {
   id: string;
   description: string;
@@ -62,6 +70,8 @@ export interface Transacao {
   date: string; // YYYY-MM-DD
   /** Preenchido quando a transação foi gerada automaticamente a partir de um evento (ex.: ao marcar como Recebido). */
   eventoId?: string;
+  /** Extrato por músico de uma transação agregada (ex.: "Pagamento equipe"). Ausente em transações simples. */
+  lineItems?: TxLineItem[];
 }
 
 export interface Contrato {

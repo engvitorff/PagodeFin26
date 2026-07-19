@@ -84,6 +84,8 @@ create table if not exists transacoes (
 
 -- Migração p/ bancos já existentes:
 alter table transacoes add column if not exists evento_id uuid references eventos(id) on delete set null;
+-- Extrato por músico de transações agregadas (ex.: "Pagamento equipe"): [{ name, instrument, cents }]
+alter table transacoes add column if not exists line_items jsonb;
 
 -- ── Contratos ───────────────────────────────────────────────
 create table if not exists contratos (
