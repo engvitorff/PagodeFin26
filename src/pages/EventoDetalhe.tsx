@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Icon } from '@/components/ui/Icon';
 import { Modal } from '@/components/ui/Modal';
-import { MapPicker } from '@/components/ui/MapPicker';
 import { useAppData } from '@/context/AppDataContext';
 import { avatarColor, calcBordero, initials } from '@/lib/calc';
 import { DESPESA_AVULSA_PRESETS } from '@/data/mocks';
 import { fmt, fmtDate, parseCents } from '@/lib/format';
 import type { BandFundMode, BandFundPercentBase, EventStatus } from '@/types';
+
+// Leaflet só é necessário quando o usuário abre o seletor de mapa — carregar
+// em separado evita baixar a lib inteira (e o CSS dela) no bundle da tela.
+const MapPicker = lazy(() => import('@/components/ui/MapPicker').then((m) => ({ default: m.MapPicker })));
 
 const OUTRO_DESPESA = '__outro__';
 
@@ -421,11 +424,13 @@ function EditEventoModal({ evento, onClose, onSave }: { evento: import('@/types'
       </button>
 
       {mapOpen && (
-        <MapPicker
-          initialQuery={location}
-          onClose={() => setMapOpen(false)}
-          onConfirm={({ address, link }) => { setLocation(address); setLocationLink(link); setMapOpen(false); }}
-        />
+        <Suspense fallback={null}>
+          <MapPicker
+            initialQuery={location}
+            onClose={() => setMapOpen(false)}
+            onConfirm={({ address, link }) => { setLocation(address); setLocationLink(link); setMapOpen(false); }}
+          />
+        </Suspense>
       )}
     </Modal>
   );

@@ -1,11 +1,14 @@
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icon } from '@/components/ui/Icon';
 import { Modal } from '@/components/ui/Modal';
-import { MapPicker } from '@/components/ui/MapPicker';
 import { FilterBar, filterButtonStyle, filterSelectStyle } from '@/components/ui/FilterBar';
 import { useAppData } from '@/context/AppDataContext';
 import { fmt, isOverdue, mesLabel, parseCents, parseDateLocal } from '@/lib/format';
+
+// Leaflet só é necessário quando o usuário abre o seletor de mapa — carregar
+// em separado evita baixar a lib inteira (e o CSS dela) no bundle da tela.
+const MapPicker = lazy(() => import('@/components/ui/MapPicker').then((m) => ({ default: m.MapPicker })));
 
 export function Eventos() {
   const { eventos, addEvento } = useAppData();
@@ -189,11 +192,13 @@ function NovoEventoModal({ onClose, onSave }: { onClose: () => void; onSave: (pa
       <button className="btn btn-brand btn-full" onClick={handleSave}>Salvar</button>
 
       {mapOpen && (
-        <MapPicker
-          initialQuery={location}
-          onClose={() => setMapOpen(false)}
-          onConfirm={({ address, link }) => { setLocation(address); setLocationLink(link); setMapOpen(false); }}
-        />
+        <Suspense fallback={null}>
+          <MapPicker
+            initialQuery={location}
+            onClose={() => setMapOpen(false)}
+            onConfirm={({ address, link }) => { setLocation(address); setLocationLink(link); setMapOpen(false); }}
+          />
+        </Suspense>
       )}
     </Modal>
   );
